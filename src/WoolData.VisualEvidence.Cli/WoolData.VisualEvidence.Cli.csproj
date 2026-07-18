@@ -9,6 +9,10 @@
     <Version>0.2.3</Version>
     <Description>Publish durable, exact-revision before/after visual evidence to code review systems.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/WoolData/visual-evidence</PackageProjectUrl>
+    <PackageTags>visual-evidence;github-actions;pull-requests;screenshots;ai-agents</PackageTags>
+    <RepositoryType>git</RepositoryType>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
