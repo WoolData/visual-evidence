@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj" />
+    <Project Path="src/WoolData.VisualEvidence/WoolData.VisualEvidence.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WoolData.VisualEvidence.Tests/WoolData.VisualEvidence.Tests.csproj" />
+  </Folder>
+</Solution>

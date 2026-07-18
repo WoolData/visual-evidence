@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "snapshot": "after",
+  "revision": "2222222222222222222222222222222222222222",
+  "environment": {
+    "os": "windows",
+    "architecture": "x64",
+    "runnerImage": "windows-2025",
+    "captureAdapter": "playwright",
+    "adapterVersion": "1.58.0",
+    "renderer": "chromium",
+    "renderScale": 1,
+    "fontSetHash": "example-font-set-v1",
+    "compatibilityKey": "f982ca37fb6ef73b4e85e0a7bb92c00259635f171aeddb43aa205946502060cd"
+  },
+  "captures": [
+    {
+      "key": "home-dark-small",
+      "label": "Home, dark theme, small viewport",
+      "path": "captures/home-dark-small.png",
+      "width": 1000,
+      "height": 700,
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ]
+}

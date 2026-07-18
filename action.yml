@@ -1,0 +1,62 @@
+name: Visual Evidence
+description: Publish durable, exact-revision before/after screenshots to a GitHub pull request without a browser or file picker.
+author: Wool Data Inc.
+branding:
+  icon: image
+  color: blue
+inputs:
+  evidence-root:
+    description: Directory containing before/manifest.json, after/manifest.json, and capture images.
+    required: true
+  summary:
+    description: Short reviewer-facing explanation of the visible change.
+    required: true
+  pull-request-number:
+    description: Pull request number. Defaults to the current pull_request event.
+    required: false
+    default: ${{ github.event.pull_request.number }}
+  repository:
+    description: GitHub repository in owner/name form.
+    required: false
+    default: ${{ github.repository }}
+  github-token:
+    description: Token with repository contents and pull-request comment write access.
+    required: true
+  assets-branch:
+    description: Protected append-only branch used to retain evidence commits.
+    required: false
+    default: visual-evidence-assets
+  publish-status:
+    description: Publish visual-evidence/published commit status. Requires statuses write permission.
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Set up .NET
+      uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      with:
+        dotnet-version: 10.0.x
+    - name: Validate and publish visual evidence
+      shell: pwsh
+      env:
+        VISUAL_EVIDENCE_ROOT: ${{ inputs.evidence-root }}
+        VISUAL_EVIDENCE_SUMMARY: ${{ inputs.summary }}
+        VISUAL_EVIDENCE_PR: ${{ inputs.pull-request-number }}
+        VISUAL_EVIDENCE_REPOSITORY: ${{ inputs.repository }}
+        VISUAL_EVIDENCE_ASSETS_BRANCH: ${{ inputs.assets-branch }}
+        VISUAL_EVIDENCE_PUBLISH_STATUS: ${{ inputs.publish-status }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        dotnet run `
+          --project (Join-Path $env:GITHUB_ACTION_PATH "src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj") `
+          --configuration Release `
+          --property:RestoreLockedMode=true `
+          -- `
+          publish `
+          --repository $env:VISUAL_EVIDENCE_REPOSITORY `
+          --change-number $env:VISUAL_EVIDENCE_PR `
+          --evidence-root $env:VISUAL_EVIDENCE_ROOT `
+          --summary $env:VISUAL_EVIDENCE_SUMMARY `
+          --assets-branch $env:VISUAL_EVIDENCE_ASSETS_BRANCH `
+          --publish-status $env:VISUAL_EVIDENCE_PUBLISH_STATUS
