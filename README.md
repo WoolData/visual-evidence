@@ -91,7 +91,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Capture before and after
         run: ./your-capture-command --output evidence
-      - uses: WoolData/visual-evidence@v0.1.1
+      - uses: WoolData/visual-evidence@v0.1.2
         with:
           evidence-root: evidence
           summary: Keeps primary actions visible at compact window sizes.
