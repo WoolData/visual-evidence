@@ -65,7 +65,7 @@ public static class AiReviewDocumentCodec
 
         try
         {
-            RejectDuplicateProperties(utf8Json);
+            RejectDuplicateAndNullProperties(utf8Json);
             AiReviewDocument? document = JsonSerializer.Deserialize(
                 utf8Json,
                 SerializerContext.AiReviewDocument);
@@ -252,7 +252,7 @@ public static class AiReviewDocumentCodec
         }
     }
 
-    private static void RejectDuplicateProperties(ReadOnlySpan<byte> utf8Json)
+    private static void RejectDuplicateAndNullProperties(ReadOnlySpan<byte> utf8Json)
     {
         var reader = new Utf8JsonReader(utf8Json, new JsonReaderOptions
         {
@@ -261,6 +261,7 @@ public static class AiReviewDocumentCodec
             AllowTrailingCommas = false,
         });
         var propertySets = new Stack<HashSet<string>>();
+        string? currentPropertyName = null;
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.StartObject)
@@ -279,6 +280,18 @@ public static class AiReviewDocumentCodec
                     throw new EvidenceValidationException(
                         $"AI review contains duplicate JSON property '{propertyName}'.");
                 }
+                currentPropertyName = propertyName;
+            }
+            else
+            {
+                if (reader.TokenType == JsonTokenType.Null)
+                {
+                    string target = currentPropertyName is null
+                        ? "array item"
+                        : $"property '{currentPropertyName}'";
+                    throw new EvidenceValidationException($"AI review {target} cannot be null.");
+                }
+                currentPropertyName = null;
             }
         }
     }

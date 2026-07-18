@@ -101,7 +101,8 @@ public sealed class AiReviewDocumentCodecTests
         EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
             () => AiReviewDocumentCodec.Read(Encoding.UTF8.GetBytes(json)));
 
-        Assert.Contains("review entries", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("reviews", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("cannot be null", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -115,6 +116,26 @@ public sealed class AiReviewDocumentCodecTests
             () => AiReviewDocumentCodec.Read(Encoding.UTF8.GetBytes(json)));
 
         Assert.Contains("promptSha256", error.Message, StringComparison.Ordinal);
+        Assert.Contains("cannot be null", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("altText", "Settings page with navigation and a save button.")]
+    [InlineData("beforeSha256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")]
+    [InlineData("area", "footer")]
+    public void Read_RejectsExplicitNullWhereSchemaRequiresAValue(string propertyName, string value)
+    {
+        string json = Encoding.UTF8.GetString(AiReviewDocumentCodec.Serialize(CreateDocument()));
+        json = json.Replace(
+            $"\"{propertyName}\":\"{value}\"",
+            $"\"{propertyName}\":null",
+            StringComparison.Ordinal);
+
+        EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
+            () => AiReviewDocumentCodec.Read(Encoding.UTF8.GetBytes(json)));
+
+        Assert.Contains(propertyName, error.Message, StringComparison.Ordinal);
+        Assert.Contains("cannot be null", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
