@@ -22,6 +22,7 @@ public static class AiReviewDocumentCodec
         AllowTrailingCommas = false,
         MaxDepth = 32,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
     private static readonly VisualEvidenceJsonContext SerializerContext = new(SerializerOptions);

@@ -26,6 +26,39 @@ public sealed class AiReviewDocumentCodecTests
     }
 
     [Fact]
+    public void Serialize_OmitsOptionalNullPropertiesToRemainSchemaValid()
+    {
+        AiReviewDocument document = CreateDocument() with
+        {
+            Reviews =
+            [
+                CreateDocument().Reviews.Single() with
+                {
+                    AltText = null,
+                    Summary = null,
+                    Differences = null,
+                    Issues =
+                    [
+                        new AiReviewIssue
+                        {
+                            Severity = "low",
+                            Area = null,
+                            Description = "Spacing changed.",
+                        },
+                    ],
+                },
+            ],
+        };
+
+        string json = Encoding.UTF8.GetString(AiReviewDocumentCodec.Serialize(document));
+
+        Assert.DoesNotContain("\"altText\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"summary\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"differences\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"area\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Read_RejectsUnknownProperties()
     {
         string json = Encoding.UTF8.GetString(AiReviewDocumentCodec.Serialize(CreateDocument()));
