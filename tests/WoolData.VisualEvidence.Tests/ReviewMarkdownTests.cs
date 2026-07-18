@@ -152,7 +152,7 @@ public sealed class ReviewMarkdownTests
                 .Select(index => template with
                 {
                     Key = $"screen-{index}",
-                    Summary = new string('x', 2000),
+                    Summary = new string('x', index == 3 ? 1400 : 2000),
                     Differences = Array.Empty<string>(),
                     Issues = Array.Empty<AiReviewIssue>(),
                 })
@@ -161,7 +161,8 @@ public sealed class ReviewMarkdownTests
 
         string markdown = ReviewMarkdown.Build("WoolData/example", revision, publication, "Summary", review);
         int digestStart = markdown.IndexOf("## Advisory AI visual review", StringComparison.Ordinal);
-        string digest = markdown[digestStart..];
+        int digestEnd = markdown.IndexOf("\n### Screen\n", digestStart, StringComparison.Ordinal);
+        string digest = markdown[digestStart..digestEnd];
 
         Assert.InRange(digest.Length, 1, 8000);
         Assert.Contains("Additional observations are available", digest, StringComparison.Ordinal);

@@ -128,6 +128,7 @@ public static class ReviewMarkdown
         digest.AppendLine(
             $"Provider '{EscapeAi(review.Provider)}', model '{EscapeAi(review.Model)}', prompt '{review.PromptSha256[..12]}'. " +
             $"[Full structured review]({fullReviewUrl}) is pinned to this evidence commit.");
+        const string truncationNotice = "\nAdditional observations are available in the full structured review.\n";
 
         foreach (AiReviewEntry entry in review.Reviews)
         {
@@ -153,13 +154,9 @@ public static class ReviewMarkdown
                     $"- **{EscapeAi(issue.Severity.ToUpperInvariant())}** {area}{EscapeAi(issue.Description)}");
             }
 
-            if (digest.Length + section.Length > MaximumAiDigestCharacters)
+            if (digest.Length + section.Length + truncationNotice.Length > MaximumAiDigestCharacters)
             {
-                string notice = $"{Environment.NewLine}Additional observations are available in the full structured review.{Environment.NewLine}";
-                if (digest.Length + notice.Length <= MaximumAiDigestCharacters)
-                {
-                    digest.Append(notice);
-                }
+                digest.Append(truncationNotice);
                 break;
             }
             digest.Append(section);
