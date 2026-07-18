@@ -294,6 +294,48 @@ public sealed class AgentProtocolTests
     }
 
     [Fact]
+    public void Review_CustomCredentialedEndpointRequiresExplicitEgressAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "https://gateway.example/v1/",
+        ]);
+
+        ArgumentException error = Assert.Throws<ArgumentException>(
+            () => ProgramMain.ResolveAiBaseUri(options, profile, noAuth: false));
+
+        Assert.Contains("--ai-allow-custom-egress true", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Review_CustomCredentialedEndpointIsAcceptedAfterExplicitAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "https://gateway.example/v1/",
+            "--ai-allow-custom-egress", "true",
+        ]);
+
+        Uri actual = ProgramMain.ResolveAiBaseUri(options, profile, noAuth: false);
+
+        Assert.Equal("https://gateway.example/v1/", actual.AbsoluteUri);
+    }
+
+    [Fact]
+    public void Review_ExplicitLoopbackNoAuthEndpointDoesNotNeedCustomEgressAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("openai-compatible");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "http://127.0.0.1:11434/v1/",
+        ]);
+
+        Uri actual = ProgramMain.ResolveAiBaseUri(options, profile, noAuth: true);
+
+        Assert.True(actual.IsLoopback);
+        Assert.Equal("http", actual.Scheme);
+    }
+
+    [Fact]
     public void BundledSkill_StaysWithinAgentContextBudget()
     {
         string path = Path.Combine(FindRepositoryRoot(), "skills", "visual-evidence", "SKILL.md");

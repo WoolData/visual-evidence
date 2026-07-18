@@ -114,9 +114,9 @@ internal static class ProgramMain
             }
             using var provider = new AnthropicImageReviewProvider(new AnthropicImageReviewOptions
             {
-                ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
+                ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable),
                 Model = options.Required("ai-model"),
-                BaseUri = ResolveAiBaseUri(options, profile.BaseUrl),
+                BaseUri = ResolveAiBaseUri(options, profile, noAuth: false),
             });
             review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
         }
@@ -128,23 +128,23 @@ internal static class ProgramMain
             }
             using var provider = new GrokImageReviewProvider(new GrokImageReviewOptions
             {
-                ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
+                ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable),
                 Model = options.Required("ai-model"),
-                BaseUri = ResolveAiBaseUri(options, profile.BaseUrl),
+                BaseUri = ResolveAiBaseUri(options, profile, noAuth: false),
             });
             review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
         }
         else
         {
             bool noAuth = options.OptionalBool("ai-no-auth", false);
-            Uri baseUri = ResolveAiBaseUri(options, profile.BaseUrl);
+            Uri baseUri = ResolveAiBaseUri(options, profile, noAuth);
             if (noAuth && (!profile.AllowsNoAuth || !baseUri.IsLoopback))
             {
                 throw new ArgumentException("--ai-no-auth is allowed only with --ai-provider openai-compatible and a loopback --ai-base-url.");
             }
             using var provider = new OpenAiCompatibleImageReviewProvider(new OpenAiCompatibleImageReviewOptions
             {
-                ApiKey = noAuth ? null : ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
+                ApiKey = noAuth ? null : ResolveAiKey(options, profile.KeyEnvironmentVariable),
                 Model = options.Required("ai-model"),
                 ProviderName = providerName,
                 BaseUri = baseUri,
@@ -445,7 +445,7 @@ internal static class ProgramMain
         return command switch
         {
             "validate" => ["evidence-root", "expected-base", "expected-head", "image-root", "image", .. commonValidation],
-            "review" => ["evidence-root", "expected-base", "expected-head", "output", "task", "ai-provider", "ai-model", "ai-base-url", "ai-key-environment-variable", "ai-no-auth", "ai-max-edge", "prompt-file", .. commonValidation],
+            "review" => ["evidence-root", "expected-base", "expected-head", "output", "task", "ai-provider", "ai-model", "ai-base-url", "ai-allow-custom-egress", "ai-key-environment-variable", "ai-no-auth", "ai-max-edge", "prompt-file", .. commonValidation],
             "publish" => ["evidence-root", "image-root", "image", "summary", "publish-status", .. github, .. commonValidation],
             "verify" or "doctor" => github,
             "describe" => ["json"],
@@ -551,23 +551,53 @@ internal static class ProgramMain
         AiProviderProfiles.FirstOrDefault(profile => string.Equals(profile.Name, name, StringComparison.Ordinal)) ??
         throw new ArgumentException("--ai-provider must be anthropic, openai-compatible, grok, or gemini.");
 
-    private static string ResolveAiKey(OptionReader options, string defaultVariable, bool allowNoAuth)
+    private static string ResolveAiKey(OptionReader options, string defaultVariable)
     {
         string variable = options.Optional("ai-key-environment-variable") ?? defaultVariable;
         string? key = Environment.GetEnvironmentVariable(variable);
-        if (string.IsNullOrWhiteSpace(key) && !allowNoAuth)
+        if (string.IsNullOrWhiteSpace(key))
         {
             throw new ArgumentException($"Environment variable '{variable}' does not contain an AI provider credential.");
         }
-        return key ?? string.Empty;
+        return key;
     }
 
-    private static Uri ResolveAiBaseUri(OptionReader options, string fallback)
+    internal static Uri ResolveAiBaseUri(OptionReader options, AiProviderProfile profile, bool noAuth)
     {
-        string value = options.Optional("ai-base-url") ?? fallback;
-        return Uri.TryCreate(value.EndsWith("/", StringComparison.Ordinal) ? value : $"{value}/", UriKind.Absolute, out Uri? uri)
-            ? uri
+        string? overrideValue = options.Optional("ai-base-url");
+        string value = overrideValue ?? profile.BaseUrl;
+        Uri uri = Uri.TryCreate(
+            value.EndsWith("/", StringComparison.Ordinal) ? value : $"{value}/",
+            UriKind.Absolute,
+            out Uri? parsed)
+            ? ValidateAiBaseUri(parsed)
             : throw new ArgumentException("--ai-base-url must be an absolute URL.");
+        Uri defaultUri = ValidateAiBaseUri(new Uri(profile.BaseUrl, UriKind.Absolute));
+        bool changesDestination = overrideValue is not null && uri != defaultUri;
+        bool explicitLoopbackNoAuth = noAuth && uri.IsLoopback;
+        if (changesDestination &&
+            !explicitLoopbackNoAuth &&
+            !options.OptionalBool("ai-allow-custom-egress", false))
+        {
+            throw new ArgumentException(
+                "A custom --ai-base-url changes where screenshots and provider credentials are sent; set --ai-allow-custom-egress true to acknowledge that destination.");
+        }
+        return uri;
+    }
+
+    private static Uri ValidateAiBaseUri(Uri baseUri)
+    {
+        if (!baseUri.IsAbsoluteUri || baseUri.Scheme is not ("https" or "http"))
+        {
+            throw new ArgumentException("--ai-base-url must be an absolute HTTP or HTTPS URL.");
+        }
+        if (baseUri.Scheme == "http" && !baseUri.IsLoopback)
+        {
+            throw new ArgumentException("Plain HTTP --ai-base-url values are allowed only for loopback hosts.");
+        }
+        return baseUri.AbsoluteUri.EndsWith("/", StringComparison.Ordinal)
+            ? baseUri
+            : new Uri($"{baseUri.AbsoluteUri}/", UriKind.Absolute);
     }
 
     private static string ReadPrompt(string? path)
@@ -644,6 +674,7 @@ internal static class ProgramMain
               --ai-provider NAME                   anthropic, openai-compatible, grok, or gemini
               --ai-model MODEL                     Required; no moving model default
               --ai-base-url URL                    Optional provider endpoint override
+              --ai-allow-custom-egress true|false  Required for a non-default credentialed endpoint
               --ai-key-environment-variable NAME  Optional credential environment variable override
               --ai-no-auth true|false              Loopback OpenAI-compatible providers only
               --ai-max-edge N                      Default: 1568; transport copy only

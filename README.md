@@ -173,11 +173,15 @@ model that supports image inputs and structured outputs; the CLI deliberately
 does not carry a moving model default. Credentials are read only from
 environment variables. An explicitly selected OpenAI-compatible loopback
 server may use `--ai-no-auth true`; plaintext HTTP is refused for non-loopback
-hosts. Use `--prompt-file` to override the injection-resistant default prompt.
+hosts. A credentialed `--ai-base-url` override also requires
+`--ai-allow-custom-egress true`, making the new screenshot-and-key destination
+an explicit operator decision. Use `--prompt-file` to override the
+injection-resistant default prompt.
 The effective prompt hash, provider, model, transport edge, and validated
 source-image hashes are recorded in the output.
 
-Protocol references: [xAI image understanding](https://docs.x.ai/developers/model-capabilities/images/understanding),
+Protocol references: [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs),
+[xAI image understanding](https://docs.x.ai/developers/model-capabilities/images/understanding),
 [xAI structured outputs](https://docs.x.ai/developers/model-capabilities/text/structured-outputs),
 [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), and
 [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output).

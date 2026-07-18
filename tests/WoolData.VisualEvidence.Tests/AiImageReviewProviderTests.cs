@@ -31,6 +31,8 @@ public sealed class AiImageReviewProviderTests
         Assert.False(observed.Headers.Contains("anthropic-beta"));
         string body = await observed.Content!.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"output_config\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("minLength", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("maxLength", body, StringComparison.Ordinal);
         Assert.Contains("\"media_type\":\"image/png\"", body, StringComparison.Ordinal);
         Assert.Contains("Untrusted capture metadata", body, StringComparison.Ordinal);
         Assert.DoesNotContain("Return one review entry whose key", body, StringComparison.Ordinal);
@@ -38,6 +40,22 @@ public sealed class AiImageReviewProviderTests
         Assert.Equal(new string('b', 64), entry.Source.BeforeSha256);
         Assert.Equal(new string('a', 64), entry.Source.AfterSha256);
         Assert.Equal("anthropic", result.Provider);
+    }
+
+    [Fact]
+    public async Task Provider_NormalizesDocumentedEnumCaseVariationBeforeValidation()
+    {
+        var handler = new StubHandler(_ => Task.FromResult(JsonResponse(OpenAiEnvelope(Content("Medium")))));
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://openai.test/v1/") };
+        using var provider = new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions { ApiKey = "secret", Model = "vision-test" },
+            client);
+
+        AiReviewDocument result = await provider.ReviewAsync(
+            Request("screen"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("medium", Assert.Single(Assert.Single(result.Reviews).Issues!).Severity);
     }
 
     [Fact]
@@ -226,8 +244,8 @@ public sealed class AiImageReviewProviderTests
             ]);
     }
 
-    private static string Content() => """
-        {"reviews":[{"altText":"After screen","summary":"Layout changed.","differences":["Button moved."],"issues":[{"severity":"low","area":"footer","description":"Tight spacing."}]}]}
+    private static string Content(string severity = "low") => $$"""
+        {"reviews":[{"altText":"After screen","summary":"Layout changed.","differences":["Button moved."],"issues":[{"severity":"{{severity}}","area":"footer","description":"Tight spacing."}]}]}
         """;
 
     private static string AnthropicEnvelope(string content) => JsonSerializer.Serialize(new

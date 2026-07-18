@@ -26,7 +26,8 @@ visual-evidence review --evidence-root evidence --output ai-review-v1.json --ai-
 ```
 
 If multiple keys exist, add `--ai-provider anthropic|openai-compatible|grok|gemini`;
-never let an agent guess the screenshot egress destination. AI review is
+never let an agent guess the screenshot egress destination. A credentialed
+custom endpoint also requires `--ai-allow-custom-egress true`. AI review is
 advisory and publication must still work when it is skipped or fails.
 
 5. Run `visual-evidence verify --repository OWNER/REPO --change-number N --json`.

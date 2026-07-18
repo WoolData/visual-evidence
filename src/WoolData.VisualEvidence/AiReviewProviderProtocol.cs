@@ -11,7 +11,7 @@ internal static class AiReviewProviderProtocol
 {
     private const int MaximumResponseBytes = 1024 * 1024;
     private const string ContentSchema = """
-        {"type":"object","additionalProperties":false,"required":["reviews"],"properties":{"reviews":{"type":"array","minItems":1,"maxItems":1,"items":{"type":"object","additionalProperties":false,"required":["altText","summary","differences","issues"],"properties":{"altText":{"type":"string","minLength":1,"maxLength":500},"summary":{"type":"string","minLength":1,"maxLength":2000},"differences":{"type":"array","maxItems":50,"items":{"type":"string","minLength":1,"maxLength":1000}},"issues":{"type":"array","maxItems":50,"items":{"type":"object","additionalProperties":false,"required":["severity","area","description"],"properties":{"severity":{"enum":["high","medium","low"]},"area":{"type":"string","minLength":1,"maxLength":200},"description":{"type":"string","minLength":1,"maxLength":1000}}}}}}}}}
+        {"type":"object","additionalProperties":false,"required":["reviews"],"properties":{"reviews":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["altText","summary","differences","issues"],"properties":{"altText":{"type":"string"},"summary":{"type":"string"},"differences":{"type":"array","items":{"type":"string"}},"issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["severity","area","description"],"properties":{"severity":{"enum":["high","medium","low"]},"area":{"type":"string"},"description":{"type":"string"}}}}}}}}}
         """;
 
     public static Uri ValidateBaseUri(Uri baseUri)
@@ -245,7 +245,7 @@ internal static class AiReviewProviderProtocol
                 AltText = entry.AltText,
                 Summary = entry.Summary,
                 Differences = entry.Differences,
-                Issues = entry.Issues,
+                Issues = NormalizeIssueSeverity(entry.Issues),
             };
             AiReviewDocumentCodec.Validate(new AiReviewDocument
             {
@@ -268,6 +268,13 @@ internal static class AiReviewProviderProtocol
             throw new EvidenceValidationException("AI provider output does not match the review response schema.", ex);
         }
     }
+
+    private static IReadOnlyList<AiReviewIssue>? NormalizeIssueSeverity(
+        IReadOnlyList<AiReviewIssue>? issues) =>
+        issues?.Select(static issue => issue is null
+            ? null!
+            : issue with { Severity = issue.Severity?.ToLowerInvariant()! })
+        .ToArray();
 
     public static async Task<byte[]> SendAsync(
         HttpClient httpClient,
