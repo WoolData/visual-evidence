@@ -10,6 +10,7 @@ namespace WoolData.VisualEvidence.GitHub;
 public sealed class GitHubApiClient :
     IChangeRequestProvider,
     IEvidenceAssetStore,
+    IAiReviewAssetStore,
     IImageAssetStore,
     IReviewPublisher,
     IStatusPublisher,
@@ -101,6 +102,44 @@ public sealed class GitHubApiClient :
             $"pr-{changeNumber}/{headRevision}/before/{pair.Key}.png",
             $"pr-{changeNumber}/{headRevision}/after/{pair.Key}.png")).ToArray();
         return new AssetPublication(commitSha, assets);
+    }
+
+    public async Task<AssetPublication> PublishWithAiReviewAsync(
+        int changeNumber,
+        string headRevision,
+        ValidatedEvidencePair evidence,
+        AiReviewDocument review,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(review);
+        AiReviewProvenanceValidator.ValidateComparison(review, evidence);
+        byte[] reviewBytes = AiReviewDocumentCodec.Serialize(review);
+
+        var entries = new List<PendingAsset>((evidence.Captures.Count * 2) + 1);
+        foreach (ValidatedImagePair pair in evidence.Captures)
+        {
+            string beforePath = $"pr-{changeNumber}/{headRevision}/before/{pair.Key}.png";
+            string afterPath = $"pr-{changeNumber}/{headRevision}/after/{pair.Key}.png";
+            string beforeBlob = await CreateBlobAsync(pair.Before.NormalizedPng, cancellationToken).ConfigureAwait(false);
+            string afterBlob = await CreateBlobAsync(pair.After.NormalizedPng, cancellationToken).ConfigureAwait(false);
+            entries.Add(new PendingAsset(pair.Key, pair.Label, beforePath, beforeBlob, true));
+            entries.Add(new PendingAsset(pair.Key, pair.Label, afterPath, afterBlob, false));
+        }
+
+        string reviewPath = $"pr-{changeNumber}/{headRevision}/ai-review-v1.json";
+        string reviewBlob = await CreateBlobAsync(reviewBytes, cancellationToken).ConfigureAwait(false);
+        entries.Add(new PendingAsset("ai-review-v1", "Advisory AI review", reviewPath, reviewBlob, true));
+        string commitSha = await PublishEntriesAsync(
+            changeNumber,
+            headRevision,
+            entries,
+            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<PublishedAsset> assets = evidence.Captures.Select(pair => new PublishedAsset(
+            pair.Key,
+            pair.Label,
+            $"pr-{changeNumber}/{headRevision}/before/{pair.Key}.png",
+            $"pr-{changeNumber}/{headRevision}/after/{pair.Key}.png")).ToArray();
+        return new AssetPublication(commitSha, assets, reviewPath);
     }
 
     public async Task<ImageAssetPublication> PublishImagesAsync(

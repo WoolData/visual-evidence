@@ -80,4 +80,101 @@ public sealed class ReviewMarkdownTests
         Assert.DoesNotContain("| Before | After |", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain('\r', markdown);
     }
+
+    [Fact]
+    public void Build_WithAiReviewPublishesPinnedDigestAndUsefulAltText()
+    {
+        string head = new('2', 40);
+        string assetCommit = new('3', 40);
+        var revision = new ChangeRequestRevision(7, head, new string('4', 40), new string('1', 40));
+        var publication = new AssetPublication(
+            assetCommit,
+            [new PublishedAsset("home", "Home", $"pr-7/{head}/before/home.png", $"pr-7/{head}/after/home.png")],
+            $"pr-7/{head}/ai-review-v1.json");
+        AiReviewDocument review = AiReviewDocumentCodecTests.CreateDocument() with
+        {
+            Provider = "provider\u0060@reviewers",
+            Model = "model",
+            Reviews =
+            [
+                AiReviewDocumentCodecTests.CreateDocument().Reviews.Single() with
+                {
+                    Key = "home",
+                    AltText = "Settings `screen` | after <save> &lt;script&gt; action moved",
+                    Summary = "Save moved below the form. @reviewers See https://evil.example/path, www.evil.example, &lt;script&gt;, and ftp://files.example/path.",
+                    Issues =
+                    [
+                        new AiReviewIssue
+                        {
+                            Severity = "medium",
+                            Area = "footer",
+                            Description = "Status text is close to the edge.",
+                        },
+                        new AiReviewIssue
+                        {
+                            Severity = "low",
+                            Area = "color",
+                            Description = "Minor color difference.",
+                        },
+                    ],
+                },
+            ],
+        };
+
+        string markdown = ReviewMarkdown.Build("WoolData/example", revision, publication, "Summary", review);
+
+        Assert.Contains("## Advisory AI visual review", markdown, StringComparison.Ordinal);
+        Assert.Contains("Machine-generated observations only", markdown, StringComparison.Ordinal);
+        Assert.Contains($"blob/{assetCommit}/pr-7/{head}/ai-review-v1.json?raw=true", markdown, StringComparison.Ordinal);
+        Assert.Contains(
+            "Settings &#96;screen&#96; \\| after &lt;save&gt; &amp;lt;script&amp;gt; action moved",
+            markdown,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("<save>", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("| ![Settings screen |", markdown, StringComparison.Ordinal);
+        Assert.Contains("**MEDIUM** footer:", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("Minor color difference", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("@reviewers", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("hxxps&#58;//evil.example", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("hxxps://evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("www\\[.\\]evil.example", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("www[.]evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("&amp;lt;script&amp;gt;", markdown, StringComparison.Ordinal);
+        Assert.Contains("ftp&#58;//files.example", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("ftp://files.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("&#96;&#64;reviewers", markdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Build_WithLargeAiReviewKeepsDigestWithinHardLimit()
+    {
+        string head = new('2', 40);
+        var revision = new ChangeRequestRevision(7, head, new string('4', 40), new string('1', 40));
+        var publication = new AssetPublication(
+            new string('3', 40),
+            [new PublishedAsset("screen-0", "Screen", "before/screen.png", "after/screen.png")],
+            $"pr-7/{head}/ai-review-v1.json");
+        AiReviewEntry template = AiReviewDocumentCodecTests.CreateDocument().Reviews.Single();
+        AiReviewDocument review = AiReviewDocumentCodecTests.CreateDocument() with
+        {
+            Reviews = Enumerable.Range(0, 6)
+                .Select(index => template with
+                {
+                    Key = $"screen-{index}",
+                    Summary = new string('x', index == 3 ? 1400 : 2000),
+                    Differences = Array.Empty<string>(),
+                    Issues = Array.Empty<AiReviewIssue>(),
+                })
+                .ToArray(),
+        };
+
+        string markdown = ReviewMarkdown.Build("WoolData/example", revision, publication, "Summary", review);
+        int digestStart = markdown.IndexOf("## Advisory AI visual review", StringComparison.Ordinal);
+        int digestEnd = markdown.IndexOf("\n### Screen\n", digestStart, StringComparison.Ordinal);
+        string digest = markdown[digestStart..digestEnd];
+
+        Assert.InRange(digest.Length, 1, 8000);
+        Assert.Contains("Additional observations are available", digest, StringComparison.Ordinal);
+    }
 }
