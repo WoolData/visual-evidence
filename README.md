@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Capture before and after
         run: ./your-capture-command --output evidence
-      - uses: WoolData/visual-evidence@v0.2.3
+      - uses: WoolData/visual-evidence@v0.2.4
         with:
           evidence-root: evidence
           summary: Keeps primary actions visible at compact window sizes.
@@ -190,6 +190,10 @@ dotnet run --project src/WoolData.VisualEvidence.Cli -- environment-key `
   --capture-adapter avalonia-headless --adapter-version 1.0.0 `
   --renderer skia --render-scale 1 --font-set-hash bundled-fonts-v1
 ```
+
+Manifest creation performs the same image validation as publication. For an
+intentionally flat capture, pass `--allow-single-color true` when creating each
+manifest and again on later `validate` or `publish` commands that read it.
 
 ## Validation
 

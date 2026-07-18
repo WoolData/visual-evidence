@@ -67,7 +67,7 @@ public sealed class GitHubApiClientTests
             }
             throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
         });
-        using var client = CreateClient(handler);
+        using var client = CreateClient(handler, assetsBranch: "evidence/assets");
         string head = new('2', 40);
         ValidatedEvidencePair evidence = CreateValidatedEvidence();
 
@@ -76,7 +76,8 @@ public sealed class GitHubApiClientTests
         Assert.Equal(new string('d', 40), publication.CommitSha);
         Assert.Contains($"pr-17/{head}/before/home.png", treeBody, StringComparison.Ordinal);
         Assert.Contains($"pr-17/{head}/after/home.png", treeBody, StringComparison.Ordinal);
-        Assert.Contains("refs/heads/visual-evidence-assets", refBody, StringComparison.Ordinal);
+        Assert.Contains("refs/heads/evidence/assets", refBody, StringComparison.Ordinal);
+        Assert.Contains(handler.Requests, request => request.Contains("/git/ref/heads/evidence%2Fassets", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -232,7 +233,10 @@ public sealed class GitHubApiClientTests
         Assert.DoesNotContain(handler.Requests, request => request.EndsWith(" /user", StringComparison.Ordinal));
     }
 
-    private static GitHubApiClient CreateClient(HttpMessageHandler handler, string? commentAuthorLogin = null)
+    private static GitHubApiClient CreateClient(
+        HttpMessageHandler handler,
+        string? commentAuthorLogin = null,
+        string assetsBranch = "visual-evidence-assets")
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.test/") };
         return new GitHubApiClient(new GitHubOptions
@@ -240,6 +244,7 @@ public sealed class GitHubApiClientTests
             Repository = "WoolData/example",
             Token = "test-token",
             CommentAuthorLogin = commentAuthorLogin,
+            AssetsBranch = assetsBranch,
         }, httpClient);
     }
 

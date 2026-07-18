@@ -2,6 +2,7 @@
 
 using System.Text.Json;
 using System.Reflection;
+using System.Diagnostics;
 using WoolData.VisualEvidence;
 using WoolData.VisualEvidence.GitHub;
 
@@ -32,6 +33,10 @@ internal static class ProgramMain
             }
 
             string command = args[0].ToLowerInvariant();
+            if (command is not ("validate" or "publish" or "verify" or "doctor" or "describe" or "environment-key" or "manifest"))
+            {
+                throw new ArgumentException($"Unknown command '{args[0]}'. Run 'visual-evidence --help'.");
+            }
             var options = OptionReader.Parse(args[1..]);
             EnsureAllowedOptions(command, options);
             return command switch
@@ -43,7 +48,7 @@ internal static class ProgramMain
                 "describe" => Describe(),
                 "environment-key" => EnvironmentKey(options),
                 "manifest" => await ManifestAsync(options, cancellation.Token).ConfigureAwait(false),
-                _ => throw new ArgumentException($"Unknown command '{args[0]}'. Run 'visual-evidence --help'."),
+                _ => throw new UnreachableException(),
             };
         }
         catch (OperationCanceledException)
@@ -258,7 +263,17 @@ internal static class ProgramMain
     private static int EnvironmentKey(OptionReader options)
     {
         CaptureEnvironment environment = ReadEnvironment(options);
-        Console.WriteLine(environment.CalculateCompatibilityKey());
+        string key = environment.CalculateCompatibilityKey();
+        if (options.OptionalBool("json", false))
+        {
+            WriteJson(
+                new AgentEnvironmentKeyResult(true, key),
+                AgentProtocolJsonContext.Default.AgentEnvironmentKeyResult);
+        }
+        else
+        {
+            Console.WriteLine(key);
+        }
         return 0;
     }
 
@@ -329,7 +344,7 @@ internal static class ProgramMain
             "publish" => ["evidence-root", "image-root", "image", "summary", "publish-status", .. github, .. commonValidation],
             "verify" or "doctor" => github,
             "describe" => ["json"],
-            "environment-key" => environment,
+            "environment-key" => [.. environment, "json"],
             "manifest" => ["snapshot", "revision", "capture-root", "output", .. environment, .. commonValidation],
             _ => [],
         };
@@ -463,6 +478,10 @@ internal sealed class OptionReader
             if (!flag && index + 1 >= args.Length)
             {
                 throw new ArgumentException($"Option '{name}' requires a value.");
+            }
+            if (!flag && args[index + 1].StartsWith("--", StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"Option '{name}' requires a value; received option '{args[index + 1]}'.");
             }
             if (!values.TryGetValue(key, out List<string>? entries))
             {
