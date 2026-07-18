@@ -41,14 +41,28 @@ jobs:
       - run: dotnet list VisualEvidence.slnx package --deprecated --include-transitive
 
   pack:
-    name: pack
-    runs-on: ubuntu-latest
+    name: pack (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
-      - run: dotnet pack src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj --configuration Release --output artifacts
+      - name: Build slim package
+        shell: pwsh
+        run: ./scripts/New-VisualEvidenceToolPackage.ps1 -OutputDirectory artifacts/package
+      - name: Install and execute package
+        shell: pwsh
+        run: |
+          dotnet tool install WoolData.VisualEvidence.Tool --tool-path artifacts/tool --add-source artifacts/package --ignore-failed-sources
+          if ($LASTEXITCODE -ne 0) { throw 'Tool package installation failed.' }
+          $tool = Join-Path artifacts/tool $(if ($IsWindows) { 'visual-evidence.exe' } else { 'visual-evidence' })
+          $description = & $tool describe --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $description.protocolVersion -ne 1) { throw 'Installed tool smoke test failed.' }
 
   native-aot:
     name: native AOT (${{ matrix.rid }})
@@ -93,6 +107,9 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or -not $validation.ok -or $validation.captures -ne 1) {
             throw "NativeAOT PNG validation smoke test failed."
           }
+      - name: Add distribution notices and remove debug symbols
+        shell: pwsh
+        run: ./scripts/Prepare-NativeDistribution.ps1 -PublishDirectory artifacts/native
       - name: Run packaged Action bootstrap smoke test
         shell: pwsh
         env:
