@@ -10,6 +10,7 @@ namespace WoolData.VisualEvidence.GitHub;
 public sealed class GitHubApiClient :
     IChangeRequestProvider,
     IEvidenceAssetStore,
+    IImageAssetStore,
     IReviewPublisher,
     IStatusPublisher,
     IDisposable
@@ -133,6 +134,74 @@ public sealed class GitHubApiClient :
         return new AssetPublication(commitSha, assets);
     }
 
+    public async Task<ImageAssetPublication> PublishImagesAsync(
+        int changeNumber,
+        string headRevision,
+        ValidatedImageSet evidence,
+        CancellationToken cancellationToken = default)
+    {
+        var entries = new List<PendingAsset>(evidence.Images.Count);
+        foreach (ValidatedImage image in evidence.Images)
+        {
+            string path = $"pr-{changeNumber}/{headRevision}/images/{image.Key}.png";
+            string blob = await CreateBlobAsync(image.NormalizedPng, cancellationToken).ConfigureAwait(false);
+            entries.Add(new PendingAsset(image.Key, image.Label, path, blob, true));
+        }
+
+        string commitSha = await PublishEntriesAsync(
+            changeNumber,
+            headRevision,
+            entries,
+            cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<PublishedImageAsset> assets = evidence.Images.Select(image => new PublishedImageAsset(
+            image.Key,
+            image.Label,
+            $"pr-{changeNumber}/{headRevision}/images/{image.Key}.png")).ToArray();
+        return new ImageAssetPublication(commitSha, assets);
+    }
+
+    private async Task<string> PublishEntriesAsync(
+        int changeNumber,
+        string headRevision,
+        IReadOnlyList<PendingAsset> entries,
+        CancellationToken cancellationToken)
+    {
+        string? commitSha = null;
+        for (int attempt = 1; attempt <= _options.MaximumPublishAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            GitReference? reference = await TryGetReferenceAsync(cancellationToken).ConfigureAwait(false);
+            string? parentSha = reference?.Sha;
+            string? baseTreeSha = parentSha is null
+                ? null
+                : await GetCommitTreeAsync(parentSha, cancellationToken).ConfigureAwait(false);
+            string treeSha = await CreateTreeAsync(entries, baseTreeSha, cancellationToken).ConfigureAwait(false);
+            if (parentSha is not null && string.Equals(treeSha, baseTreeSha, StringComparison.OrdinalIgnoreCase))
+            {
+                return parentSha;
+            }
+            string candidate = await CreateCommitAsync(
+                $"Add visual evidence for change #{changeNumber} at {headRevision}",
+                treeSha,
+                parentSha,
+                cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await UpdateReferenceAsync(candidate, parentSha is null, cancellationToken).ConfigureAwait(false);
+                commitSha = candidate;
+                break;
+            }
+            catch (GitHubApiException ex) when (attempt < _options.MaximumPublishAttempts && ex.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(150 * attempt), cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        return commitSha ?? throw new GitHubApiException(
+            HttpStatusCode.Conflict,
+            "Could not update the evidence branch after concurrent publication retries.");
+    }
+
     public async Task PublishOrUpdateAsync(
         int changeNumber,
         string markdown,
@@ -148,7 +217,7 @@ public sealed class GitHubApiClient :
             using JsonDocument _ = await SendJsonAsync(
                 HttpMethod.Post,
                 $"repos/{_options.Repository}/issues/{changeNumber}/comments",
-                new { body = markdown },
+                Serialize(new GitHubCommentPayload(markdown), VisualEvidenceJsonContext.Default.GitHubCommentPayload),
                 cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -156,7 +225,7 @@ public sealed class GitHubApiClient :
         using JsonDocument updated = await SendJsonAsync(
             HttpMethod.Patch,
             $"repos/{_options.Repository}/issues/comments/{comment.Id}",
-            new { body = markdown },
+            Serialize(new GitHubCommentPayload(markdown), VisualEvidenceJsonContext.Default.GitHubCommentPayload),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -181,7 +250,7 @@ public sealed class GitHubApiClient :
         using JsonDocument _ = await SendJsonAsync(
             HttpMethod.Post,
             $"repos/{_options.Repository}/statuses/{revision}",
-            new { state, description, context },
+            Serialize(new GitHubStatusPayload(state, description, context), VisualEvidenceJsonContext.Default.GitHubStatusPayload),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -198,7 +267,7 @@ public sealed class GitHubApiClient :
         using JsonDocument result = await SendJsonAsync(
             HttpMethod.Post,
             $"repos/{_options.Repository}/git/blobs",
-            new { content = Convert.ToBase64String(bytes), encoding = "base64" },
+            Serialize(new GitHubBlobPayload(Convert.ToBase64String(bytes), "base64"), VisualEvidenceJsonContext.Default.GitHubBlobPayload),
             cancellationToken).ConfigureAwait(false);
         return RequiredString(result.RootElement, "sha");
     }
@@ -232,25 +301,13 @@ public sealed class GitHubApiClient :
         string? baseTreeSha,
         CancellationToken cancellationToken)
     {
-        object[] treeEntries = entries.Select(entry => (object)new
-        {
-            path = entry.Path,
-            mode = "100644",
-            type = "blob",
-            sha = entry.BlobSha,
-        }).ToArray();
-        var payload = new Dictionary<string, object?>
-        {
-            ["tree"] = treeEntries,
-        };
-        if (baseTreeSha is not null)
-        {
-            payload["base_tree"] = baseTreeSha;
-        }
+        GitHubTreeEntry[] treeEntries = entries.Select(entry =>
+            new GitHubTreeEntry(entry.Path, "100644", "blob", entry.BlobSha)).ToArray();
+        var payload = new GitHubTreePayload(baseTreeSha, treeEntries);
         using JsonDocument tree = await SendJsonAsync(
             HttpMethod.Post,
             $"repos/{_options.Repository}/git/trees",
-            payload,
+            Serialize(payload, VisualEvidenceJsonContext.Default.GitHubTreePayload),
             cancellationToken).ConfigureAwait(false);
         return RequiredString(tree.RootElement, "sha");
     }
@@ -261,19 +318,11 @@ public sealed class GitHubApiClient :
         string? parentSha,
         CancellationToken cancellationToken)
     {
-        var payload = new Dictionary<string, object?>
-        {
-            ["message"] = message,
-            ["tree"] = treeSha,
-        };
-        if (parentSha is not null)
-        {
-            payload["parents"] = new[] { parentSha };
-        }
+        var payload = new GitHubCommitPayload(message, treeSha, parentSha is null ? null : [parentSha]);
         using JsonDocument commit = await SendJsonAsync(
             HttpMethod.Post,
             $"repos/{_options.Repository}/git/commits",
-            payload,
+            Serialize(payload, VisualEvidenceJsonContext.Default.GitHubCommitPayload),
             cancellationToken).ConfigureAwait(false);
         return RequiredString(commit.RootElement, "sha");
     }
@@ -285,7 +334,9 @@ public sealed class GitHubApiClient :
             using JsonDocument created = await SendJsonAsync(
                 HttpMethod.Post,
                 $"repos/{_options.Repository}/git/refs",
-                new { @ref = $"refs/heads/{_options.AssetsBranch}", sha = commitSha },
+                Serialize(
+                    new GitHubRefCreatePayload($"refs/heads/{_options.AssetsBranch}", commitSha),
+                    VisualEvidenceJsonContext.Default.GitHubRefCreatePayload),
                 cancellationToken).ConfigureAwait(false);
             return;
         }
@@ -294,7 +345,7 @@ public sealed class GitHubApiClient :
         using JsonDocument updated = await SendJsonAsync(
             HttpMethod.Patch,
             $"repos/{_options.Repository}/git/refs/heads/{branch}",
-            new { sha = commitSha, force = false },
+            Serialize(new GitHubRefUpdatePayload(commitSha, false), VisualEvidenceJsonContext.Default.GitHubRefUpdatePayload),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -360,7 +411,7 @@ public sealed class GitHubApiClient :
     private async Task<JsonDocument> SendJsonAsync(
         HttpMethod method,
         string endpoint,
-        object? payload,
+        string? payload,
         CancellationToken cancellationToken)
     {
         JsonDocument? result = await TrySendJsonAsync(
@@ -375,14 +426,14 @@ public sealed class GitHubApiClient :
     private async Task<JsonDocument?> TrySendJsonAsync(
         HttpMethod method,
         string endpoint,
-        object? payload,
+        string? payload,
         HttpStatusCode? allowedMissingStatus,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, endpoint);
         if (payload is not null)
         {
-            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
         }
         using HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (allowedMissingStatus is not null && response.StatusCode == allowedMissingStatus)
@@ -406,6 +457,9 @@ public sealed class GitHubApiClient :
             ? throw new GitHubApiException(HttpStatusCode.InternalServerError, $"GitHub response omitted '{property}'.")
             : value;
     }
+
+    private static string Serialize<T>(T payload, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo) =>
+        JsonSerializer.Serialize(payload, typeInfo);
 
     private static string SanitizeError(string value)
     {

@@ -48,6 +48,50 @@ public static class ReviewMarkdown
         return markdown.ToString().Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
     }
 
+    public static string BuildImages(
+        string repository,
+        ChangeRequestRevision revision,
+        ImageAssetPublication publication,
+        string summary)
+    {
+        GitHubAssetUrl.ValidateRepository(repository);
+
+        var markdown = new StringBuilder();
+        AppendHeader(markdown, revision, publication.CommitSha, summary);
+        foreach (PublishedImageAsset asset in publication.Assets)
+        {
+            string url = GitHubAssetUrl.Build(repository, publication.CommitSha, asset.Path);
+            markdown.AppendLine();
+            markdown.AppendLine($"### {Escape(asset.Label)}");
+            markdown.AppendLine();
+            markdown.AppendLine($"![{EscapeAlt(asset.Label)}]({url})");
+        }
+        return Normalize(markdown);
+    }
+
+    private static void AppendHeader(
+        StringBuilder markdown,
+        ChangeRequestRevision revision,
+        string commitSha,
+        string summary)
+    {
+        markdown.AppendLine(Marker);
+        markdown.AppendLine($"Visual-Evidence-Head: {revision.HeadRevision}");
+        markdown.AppendLine($"Visual-Evidence-Base: {revision.MergeBaseRevision}");
+        markdown.AppendLine($"Visual-Evidence-Asset-Commit: {commitSha}");
+        markdown.AppendLine();
+        markdown.AppendLine("## Visual evidence");
+        markdown.AppendLine();
+        markdown.AppendLine(Escape(summary));
+        markdown.AppendLine();
+        markdown.AppendLine(
+            $"Captured for head `{revision.HeadRevision}` against merge base `{revision.MergeBaseRevision}`. " +
+            $"Assets are pinned to repository commit `{commitSha}`.");
+    }
+
+    private static string Normalize(StringBuilder markdown) =>
+        markdown.ToString().Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
+
     private static string Escape(string value) => NormalizeSingleLine(value)
         .Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("[", "\\[", StringComparison.Ordinal)

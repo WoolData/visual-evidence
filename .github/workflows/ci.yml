@@ -49,3 +49,38 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet pack src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj --configuration Release --output artifacts
+
+  native-aot:
+    name: native AOT (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            executable: visual-evidence.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            executable: visual-evidence
+          - os: macos-latest
+            rid: osx-arm64
+            executable: visual-evidence
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish NativeAOT executable
+        shell: pwsh
+        run: >-
+          dotnet publish src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj
+          --configuration Release --runtime ${{ matrix.rid }} --self-contained true
+          -p:PublishAot=true -p:PublishTrimmed=true --output artifacts/native
+      - name: Run NativeAOT protocol smoke test
+        shell: pwsh
+        run: |
+          $description = & (Join-Path "artifacts/native" "${{ matrix.executable }}") describe --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $description.protocolVersion -ne 1 -or -not $description.captureIsExternal) {
+            throw "NativeAOT protocol smoke test failed."
+          }

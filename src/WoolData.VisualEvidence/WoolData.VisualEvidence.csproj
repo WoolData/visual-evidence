@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
     <Description>Framework-neutral validation and publishing contracts for durable pull-request visual evidence.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

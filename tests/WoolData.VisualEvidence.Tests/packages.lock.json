@@ -174,6 +174,12 @@
           "SkiaSharp.NativeAssets.Linux.NoDependencies": "[4.150.1, )"
         }
       },
+      "WoolData.VisualEvidence.Tool": {
+        "type": "Project",
+        "dependencies": {
+          "WoolData.VisualEvidence": "[1.0.0, )"
+        }
+      },
       "SkiaSharp": {
         "type": "CentralTransitive",
         "requested": "[4.150.1, )",

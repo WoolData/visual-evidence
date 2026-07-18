@@ -29,6 +29,19 @@ The result is not merely a screenshot. It is review evidence with explicit prove
 
 ## Quick Start
 
+Already have screenshots and just need them in a PR? Publish one image, selected images, or a folder:
+
+```powershell
+visual-evidence publish --repository owner/repo --change-number 123 `
+  --image screenshots/step-1.png --image screenshots/step-2.png `
+  --summary "Current Step 1 and Step 2 layouts" --json
+
+visual-evidence publish --repository owner/repo --change-number 123 `
+  --image-root screenshots --summary "Current UI" --json
+```
+
+The filenames become reviewer-facing labels. Every PNG receives the same validation, immutable asset commit, exact head/base markers, and idempotent PR comment as a comparison matrix. Screenshot capture remains a separate concern.
+
 ### 1. Produce evidence
 
 Create the same capture matrix at the merge base and pull-request head:
@@ -98,13 +111,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
+For standalone screenshots, replace `evidence-root` with `image-root`, or pass newline-delimited paths through `images`.
+
 Pin the Action to a full commit SHA in security-sensitive repositories. The tag above keeps the introductory example readable.
 
 To publish the optional `visual-evidence/published` commit status, grant `statuses: write` and set `publish-status: true`.
 
 The default `GITHUB_TOKEN` and user tokens are both supported. When using a custom GitHub App installation token, set `comment-author-login` to that App's bot login, such as `my-app[bot]`, so repeated runs update only the App's own evidence comment.
 
+The CLI is NativeAOT-compatible. CI publishes and executes native binaries on Windows, macOS, and Linux; release automation can distribute those binaries without requiring a .NET runtime or SDK on the consumer machine.
+
 ### 4. Use the CLI
+
+Agents should begin with `visual-evidence describe --json`. The compact protocol avoids README discovery during routine runs; an installable skill is available at [`skills/visual-evidence/SKILL.md`](skills/visual-evidence/SKILL.md).
 
 ```powershell
 dotnet run --project src/WoolData.VisualEvidence.Cli -- validate `

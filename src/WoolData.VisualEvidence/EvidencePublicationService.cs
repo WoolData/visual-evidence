@@ -7,6 +7,7 @@ public sealed class EvidencePublicationService
     private readonly string _repository;
     private readonly IChangeRequestProvider _changeRequests;
     private readonly IEvidenceAssetStore _assets;
+    private readonly IImageAssetStore? _imageAssets;
     private readonly IReviewPublisher _reviews;
     private readonly IStatusPublisher? _statuses;
     private readonly EvidencePairValidator _validator;
@@ -17,14 +18,68 @@ public sealed class EvidencePublicationService
         IEvidenceAssetStore assets,
         IReviewPublisher reviews,
         IStatusPublisher? statuses = null,
-        EvidencePairValidator? validator = null)
+        EvidencePairValidator? validator = null,
+        IImageAssetStore? imageAssets = null)
     {
         _repository = repository;
         _changeRequests = changeRequests;
         _assets = assets;
+        _imageAssets = imageAssets ?? assets as IImageAssetStore;
         _reviews = reviews;
         _statuses = statuses;
         _validator = validator ?? new EvidencePairValidator();
+    }
+
+    public async Task<ImageAssetPublication> PublishImagesAsync(
+        int changeNumber,
+        IEnumerable<string> imagePaths,
+        string summary,
+        EvidenceImageSetValidator? validator = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_imageAssets is null)
+        {
+            throw new InvalidOperationException("The configured asset store does not support image-set publication.");
+        }
+        ChangeRequestRevision revision = await _changeRequests.ResolveRevisionAsync(
+            changeNumber,
+            cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ValidatedImageSet evidence = await (validator ?? new EvidenceImageSetValidator()).ValidateAsync(
+                imagePaths,
+                cancellationToken).ConfigureAwait(false);
+            ImageAssetPublication publication = await _imageAssets.PublishImagesAsync(
+                changeNumber,
+                revision.HeadRevision,
+                evidence,
+                cancellationToken).ConfigureAwait(false);
+            string markdown = ReviewMarkdown.BuildImages(_repository, revision, publication, summary);
+            await _reviews.PublishOrUpdateAsync(changeNumber, markdown, cancellationToken).ConfigureAwait(false);
+            if (_statuses is not null)
+            {
+                await _statuses.PublishStatusAsync(
+                    revision.HeadRevision,
+                    "success",
+                    "Current visual evidence is published.",
+                    "visual-evidence/published",
+                    cancellationToken).ConfigureAwait(false);
+            }
+            return publication;
+        }
+        catch
+        {
+            if (_statuses is not null)
+            {
+                await _statuses.PublishStatusAsync(
+                    revision.HeadRevision,
+                    "failure",
+                    "Visual evidence publication failed.",
+                    "visual-evidence/published",
+                    cancellationToken).ConfigureAwait(false);
+            }
+            throw;
+        }
     }
 
     public async Task<AssetPublication> PublishAsync(
@@ -134,7 +189,15 @@ public sealed class EvidencePublicationService
             changeNumber,
             headRevision,
             "after");
-        return comment.Contains($"]({beforePrefix}", StringComparison.Ordinal) &&
+        string imagePrefix = GitHubAssetUrl.BuildEvidencePrefix(
+            _repository,
+            commit,
+            changeNumber,
+            headRevision,
+            "images");
+        bool pair = comment.Contains($"]({beforePrefix}", StringComparison.Ordinal) &&
             comment.Contains($"]({afterPrefix}", StringComparison.Ordinal);
+        bool imageSet = comment.Contains($"]({imagePrefix}", StringComparison.Ordinal);
+        return pair || imageSet;
     }
 }

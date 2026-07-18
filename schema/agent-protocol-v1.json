@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WoolData/visual-evidence/schema/agent-protocol-v1.json",
+  "title": "Visual Evidence agent result",
+  "type": "object",
+  "required": ["ok"],
+  "properties": {
+    "ok": { "type": "boolean" },
+    "mode": { "enum": ["comparison", "images"] },
+    "repository": { "type": "string" },
+    "changeNumber": { "type": "integer", "minimum": 1 },
+    "assetCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "captures": { "type": "integer", "minimum": 0 },
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

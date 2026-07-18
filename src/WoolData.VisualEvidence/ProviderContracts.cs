@@ -16,6 +16,15 @@ public interface IEvidenceAssetStore
         CancellationToken cancellationToken = default);
 }
 
+public interface IImageAssetStore
+{
+    Task<ImageAssetPublication> PublishImagesAsync(
+        int changeNumber,
+        string headRevision,
+        ValidatedImageSet evidence,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IReviewPublisher
 {
     Task PublishOrUpdateAsync(

@@ -100,7 +100,9 @@ public static partial class EvidenceManifestBuilder
         Directory.CreateDirectory(outputDirectory);
         await File.WriteAllTextAsync(
             output,
-            JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }),
+            JsonSerializer.Serialize(
+                manifest,
+                new VisualEvidenceJsonContext(new JsonSerializerOptions { WriteIndented = true }).EvidenceManifest),
             cancellationToken).ConfigureAwait(false);
         return manifest;
     }

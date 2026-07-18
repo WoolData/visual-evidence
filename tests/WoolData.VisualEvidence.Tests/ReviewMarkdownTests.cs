@@ -61,4 +61,23 @@ public sealed class ReviewMarkdownTests
         Assert.Contains("\\| compact", markdown, StringComparison.Ordinal);
         Assert.Contains("&#64;WoolData/reviewers", markdown, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void BuildImages_PublishesStandaloneImagesWithoutInventingComparisonSemantics()
+    {
+        string head = new('2', 40);
+        string assetCommit = new('3', 40);
+        var revision = new ChangeRequestRevision(7, head, new string('4', 40), new string('1', 40));
+        var publication = new ImageAssetPublication(assetCommit,
+        [
+            new PublishedImageAsset("step-1", "Step 1", $"pr-7/{head}/images/step-1.png"),
+        ]);
+
+        string markdown = ReviewMarkdown.BuildImages("WoolData/example", revision, publication, "Current UI");
+
+        Assert.Contains("## Visual evidence", markdown, StringComparison.Ordinal);
+        Assert.Contains($"blob/{assetCommit}/pr-7/{head}/images/step-1.png?raw=true", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("| Before | After |", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain('\r', markdown);
+    }
 }
