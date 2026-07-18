@@ -233,6 +233,8 @@ public sealed class AiImageReviewProviderTests
     [Theory]
     [InlineData("provider\u200Bname")]
     [InlineData("provider\U000E0001name")]
+    [InlineData("provider\uFE0Fname")]
+    [InlineData("provider\U000E0100name")]
     public void Provider_RejectsFormatCharactersInProviderName(string providerName)
     {
         Assert.Throws<ArgumentException>(() => new OpenAiCompatibleImageReviewProvider(
@@ -241,6 +243,32 @@ public sealed class AiImageReviewProviderTests
                 Model = "vision-test",
                 ProviderName = providerName,
             }));
+    }
+
+    [Fact]
+    public void Provider_RejectsMalformedUtf16InProviderName()
+    {
+        string providerName = string.Concat("provider", '\uD800', "name");
+
+        Assert.Throws<ArgumentException>(() => new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions
+            {
+                Model = "vision-test",
+                ProviderName = providerName,
+            }));
+    }
+
+    [Theory]
+    [InlineData("Café")]
+    [InlineData("レビュー")]
+    public void Provider_AcceptsVisibleUnicodeProviderNames(string providerName)
+    {
+        using var provider = new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions
+            {
+                Model = "vision-test",
+                ProviderName = providerName,
+            });
     }
 
     [Fact]
