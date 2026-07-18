@@ -126,18 +126,18 @@ public static class ReviewMarkdown
         digest.AppendLine("Machine-generated observations only; they are not an approval or merge gate.");
         digest.AppendLine();
         digest.AppendLine(
-            $"Provider '{Escape(review.Provider)}', model '{Escape(review.Model)}', prompt '{review.PromptSha256[..12]}'. " +
+            $"Provider '{EscapeAi(review.Provider)}', model '{EscapeAi(review.Model)}', prompt '{review.PromptSha256[..12]}'. " +
             $"[Full structured review]({fullReviewUrl}) is pinned to this evidence commit.");
 
         foreach (AiReviewEntry entry in review.Reviews)
         {
             var section = new StringBuilder();
             section.AppendLine();
-            section.AppendLine($"### {Escape(entry.Key)} review");
+            section.AppendLine($"### {EscapeAi(entry.Key)} review");
             if (!string.IsNullOrWhiteSpace(entry.Summary))
             {
                 section.AppendLine();
-                section.AppendLine(Escape(entry.Summary));
+                section.AppendLine(EscapeAi(entry.Summary));
             }
             foreach (AiReviewIssue issue in entry.Issues ?? Array.Empty<AiReviewIssue>())
             {
@@ -148,9 +148,9 @@ public static class ReviewMarkdown
                 section.AppendLine();
                 string area = string.IsNullOrWhiteSpace(issue.Area)
                     ? string.Empty
-                    : $"{Escape(issue.Area)}: ";
+                    : $"{EscapeAi(issue.Area)}: ";
                 section.AppendLine(
-                    $"- **{Escape(issue.Severity.ToUpperInvariant())}** {area}{Escape(issue.Description)}");
+                    $"- **{EscapeAi(issue.Severity.ToUpperInvariant())}** {area}{EscapeAi(issue.Description)}");
             }
 
             if (digest.Length + section.Length > MaximumAiDigestCharacters)
@@ -184,6 +184,11 @@ public static class ReviewMarkdown
         .Replace("(", string.Empty, StringComparison.Ordinal)
         .Replace(")", string.Empty, StringComparison.Ordinal)
         .Replace("@", "&#64;", StringComparison.Ordinal);
+
+    private static string EscapeAi(string value) => Escape(value)
+        .Replace("https://", "hxxps://", StringComparison.OrdinalIgnoreCase)
+        .Replace("http://", "hxxp://", StringComparison.OrdinalIgnoreCase)
+        .Replace("www.", "www[.]", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeSingleLine(string value) => string.Join(
         ' ',

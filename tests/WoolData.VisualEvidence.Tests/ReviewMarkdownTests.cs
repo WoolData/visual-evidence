@@ -101,7 +101,7 @@ public sealed class ReviewMarkdownTests
                 {
                     Key = "home",
                     AltText = "Settings screen after save action moved",
-                    Summary = "Save moved below the form. @reviewers",
+                    Summary = "Save moved below the form. @reviewers See https://evil.example/path.",
                     Issues =
                     [
                         new AiReviewIssue
@@ -130,6 +130,8 @@ public sealed class ReviewMarkdownTests
         Assert.Contains("**MEDIUM** footer:", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("Minor color difference", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("@reviewers", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("hxxps://evil.example", markdown, StringComparison.Ordinal);
         Assert.Contains("&#96;&#64;reviewers", markdown, StringComparison.Ordinal);
     }
 }

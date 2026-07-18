@@ -197,6 +197,9 @@ Protocol references: [Claude structured outputs](https://platform.claude.com/doc
 normalized screenshots in the same append-only asset commit, and renders a
 bounded advisory digest in the PR comment. The after-image alt text uses the
 review description. Publication without `--ai-review` remains fully supported.
+Publishing the same review file is idempotent. Running the model again can
+produce different advisory text and therefore a new evidence commit even when
+the source screenshots are unchanged; the PR comment still updates in place.
 
 Direct API providers are the unattended CI path. Optional adapters for existing
 Codex CLI and Claude Code subscription logins are tracked separately in
