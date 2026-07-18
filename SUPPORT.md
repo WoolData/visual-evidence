@@ -3,3 +3,5 @@
 Use GitHub Discussions for usage questions and design conversations. Use GitHub Issues for reproducible defects and focused feature requests. Security concerns belong in private vulnerability reporting as described in [SECURITY.md](SECURITY.md).
 
 This project is provided under the MIT License without warranty or a commercial support commitment.
+
+A live end-to-end evidence demonstration is published on the pull request that introduced this line.
