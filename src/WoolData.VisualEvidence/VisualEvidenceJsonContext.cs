@@ -9,6 +9,7 @@ namespace WoolData.VisualEvidence;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     WriteIndented = false)]
 [JsonSerializable(typeof(EvidenceManifest))]
+[JsonSerializable(typeof(AiReviewDocument))]
 [JsonSerializable(typeof(GitHubCommentPayload))]
 [JsonSerializable(typeof(GitHubStatusPayload))]
 [JsonSerializable(typeof(GitHubBlobPayload))]
