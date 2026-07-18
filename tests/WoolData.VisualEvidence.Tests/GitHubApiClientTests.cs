@@ -81,6 +81,57 @@ public sealed class GitHubApiClientTests
     }
 
     [Fact]
+    public async Task PublishWithAiReviewAsync_CommitsImagesAndReviewInOneTree()
+    {
+        int blob = 0;
+        string? treeBody = null;
+        var handler = new RecordingHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/blobs", StringComparison.Ordinal))
+            {
+                blob++;
+                return Json(HttpStatusCode.Created, $"{{\"sha\":\"{new string((char)('a' + blob), 40)}\"}}");
+            }
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/heads/", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/trees", StringComparison.Ordinal))
+            {
+                treeBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                return Json(HttpStatusCode.Created, $"{{\"sha\":\"{new string('f', 40)}\"}}");
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/commits", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.Created, $"{{\"sha\":\"{new string('d', 40)}\"}}");
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/refs", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.Created, "{}");
+            }
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+        using var client = CreateClient(handler);
+        string head = new('2', 40);
+        ValidatedEvidencePair evidence = CreateValidatedEvidence();
+        AiReviewDocument review = CreateAiReview(evidence);
+
+        AssetPublication publication = await client.PublishWithAiReviewAsync(
+            17,
+            head,
+            evidence,
+            review,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, blob);
+        Assert.Contains($"pr-17/{head}/before/home.png", treeBody, StringComparison.Ordinal);
+        Assert.Contains($"pr-17/{head}/after/home.png", treeBody, StringComparison.Ordinal);
+        Assert.Contains($"pr-17/{head}/ai-review-v1.json", treeBody, StringComparison.Ordinal);
+        Assert.Equal($"pr-17/{head}/ai-review-v1.json", publication.AiReviewPath);
+    }
+
+    [Fact]
     public async Task PublishOrUpdateAsync_UpdatesOwnMarkerComment()
     {
         HttpMethod? finalMethod = null;
@@ -265,6 +316,26 @@ public sealed class GitHubApiClientTests
             Manifest("before", '1'),
             Manifest("after", '2'),
             new[] { new ValidatedImagePair("home", "Home", before, after) });
+    }
+
+    private static AiReviewDocument CreateAiReview(ValidatedEvidencePair evidence)
+    {
+        ValidatedImagePair pair = evidence.Captures.Single();
+        return AiReviewDocumentCodecTests.CreateDocument() with
+        {
+            Reviews =
+            [
+                AiReviewDocumentCodecTests.CreateDocument().Reviews.Single() with
+                {
+                    Key = pair.Key,
+                    Source = new AiReviewSource
+                    {
+                        BeforeSha256 = pair.Before.SourceSha256,
+                        AfterSha256 = pair.After.SourceSha256,
+                    },
+                },
+            ],
+        };
     }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string json) => new(status)

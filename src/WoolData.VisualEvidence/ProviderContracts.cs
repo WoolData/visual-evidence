@@ -16,6 +16,16 @@ public interface IEvidenceAssetStore
         CancellationToken cancellationToken = default);
 }
 
+public interface IAiReviewAssetStore
+{
+    Task<AssetPublication> PublishWithAiReviewAsync(
+        int changeNumber,
+        string headRevision,
+        ValidatedEvidencePair evidence,
+        AiReviewDocument review,
+        CancellationToken cancellationToken = default);
+}
+
 public interface IImageAssetStore
 {
     Task<ImageAssetPublication> PublishImagesAsync(

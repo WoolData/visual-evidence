@@ -129,7 +129,8 @@ public sealed record PublishedAsset(
 
 public sealed record AssetPublication(
     string CommitSha,
-    IReadOnlyList<PublishedAsset> Assets);
+    IReadOnlyList<PublishedAsset> Assets,
+    string? AiReviewPath = null);
 
 public sealed record PublishedImageAsset(
     string Key,
