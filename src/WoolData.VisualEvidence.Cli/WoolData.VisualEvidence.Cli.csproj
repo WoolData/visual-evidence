@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <AssemblyName>visual-evidence</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>visual-evidence</ToolCommandName>
     <PackageId>WoolData.VisualEvidence.Tool</PackageId>
@@ -11,6 +13,9 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../WoolData.VisualEvidence/WoolData.VisualEvidence.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="WoolData.VisualEvidence.Tests" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../README.md" Pack="true" PackagePath="/" />

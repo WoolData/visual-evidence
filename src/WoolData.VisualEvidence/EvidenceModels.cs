@@ -113,6 +113,8 @@ public sealed record ValidatedImagePair(
     ValidatedImage Before,
     ValidatedImage After);
 
+public sealed record ValidatedImageSet(IReadOnlyList<ValidatedImage> Images);
+
 public sealed record ChangeRequestRevision(
     int Number,
     string HeadRevision,
@@ -128,3 +130,12 @@ public sealed record PublishedAsset(
 public sealed record AssetPublication(
     string CommitSha,
     IReadOnlyList<PublishedAsset> Assets);
+
+public sealed record PublishedImageAsset(
+    string Key,
+    string Label,
+    string Path);
+
+public sealed record ImageAssetPublication(
+    string CommitSha,
+    IReadOnlyList<PublishedImageAsset> Assets);

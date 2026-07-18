@@ -1,8 +1,6 @@
 // Copyright (c) 2026 Wool Data Inc. Licensed under the MIT License.
 
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
-using SkiaSharp;
 
 namespace WoolData.VisualEvidence;
 
@@ -189,112 +187,14 @@ public sealed partial class EvidencePairValidator
         {
             throw new EvidenceValidationException($"Capture '{capture.Key}' could not be traced to its snapshot directory.");
         }
-        if (!string.Equals(file.Extension, ".png", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new EvidenceValidationException($"Capture '{capture.Key}' must be a PNG file.");
-        }
-        if (file.Length is <= 0 || file.Length > _options.MaximumImageBytes)
-        {
-            throw new EvidenceValidationException($"Capture '{capture.Key}' exceeds the configured file-size boundary.");
-        }
-
-        byte[] sourceBytes = File.ReadAllBytes(path);
-        string hash = Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(capture.Sha256) || !NormalizedHashEquals(hash, capture.Sha256))
-        {
-            throw new EvidenceValidationException($"Capture '{capture.Key}' SHA-256 does not match its manifest.");
-        }
-
-        try
-        {
-            using var data = SKData.CreateCopy(sourceBytes);
-            using SKCodec? codec = SKCodec.Create(data);
-            if (codec is null)
-            {
-                throw new EvidenceValidationException($"Capture '{capture.Key}' is not a decodable PNG.");
-            }
-            if (codec.EncodedFormat != SKEncodedImageFormat.Png)
-            {
-                throw new EvidenceValidationException($"Capture '{capture.Key}' has a PNG extension but contains another image format.");
-            }
-            SKImageInfo info = codec.Info;
-            long pixels = checked((long)info.Width * info.Height);
-            if (info.Width <= 0 || info.Height <= 0 || pixels > _options.MaximumPixels)
-            {
-                throw new EvidenceValidationException($"Capture '{capture.Key}' exceeds the configured pixel boundary.");
-            }
-            if (info.Width != capture.Width || info.Height != capture.Height)
-            {
-                throw new EvidenceValidationException(
-                    $"Capture '{capture.Key}' dimensions are {info.Width}x{info.Height}; manifest declares {capture.Width}x{capture.Height}.");
-            }
-
-            var decodeInfo = new SKImageInfo(
-                info.Width,
-                info.Height,
-                SKColorType.Rgba8888,
-                SKAlphaType.Unpremul,
-                info.ColorSpace);
-            using SKBitmap? bitmap = SKBitmap.Decode(data, decodeInfo);
-            if (bitmap is null)
-            {
-                throw new EvidenceValidationException($"Capture '{capture.Key}' could not be decoded.");
-            }
-            (bool isSingleColor, bool hasVisiblePixel) = InspectPixels(bitmap);
-            if (!hasVisiblePixel)
-            {
-                throw new EvidenceValidationException($"Capture '{capture.Key}' is fully transparent.");
-            }
-            if (_options.RejectSingleColorImages && isSingleColor)
-            {
-                throw new EvidenceValidationException($"Capture '{capture.Key}' is a single-color frame.");
-            }
-
-            using SKImage normalized = SKImage.FromBitmap(bitmap);
-            using SKData normalizedData = normalized.Encode(SKEncodedImageFormat.Png, 100)
-                ?? throw new EvidenceValidationException($"Capture '{capture.Key}' could not be normalized.");
-            return new ValidatedImage(
-                capture.Key,
-                capture.Label,
-                path,
-                info.Width,
-                info.Height,
-                hash,
-                normalizedData.ToArray());
-        }
-        catch (EvidenceValidationException)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or OverflowException or ArgumentException)
-        {
-            throw new EvidenceValidationException($"Capture '{capture.Key}' failed PNG validation.", ex);
-        }
-    }
-
-    private static (bool IsSingleColor, bool HasVisiblePixel) InspectPixels(SKBitmap bitmap)
-    {
-        const int bytesPerPixel = 4;
-        if (bitmap.ColorType != SKColorType.Rgba8888 || bitmap.BytesPerPixel != bytesPerPixel)
-        {
-            throw new InvalidOperationException("Pixel inspection requires RGBA8888 input.");
-        }
-
-        ReadOnlySpan<byte> pixels = bitmap.GetPixelSpan();
-        ReadOnlySpan<byte> first = pixels[..bytesPerPixel];
-        bool isSingleColor = true;
-        bool hasVisiblePixel = false;
-        for (int y = 0; y < bitmap.Height; y++)
-        {
-            ReadOnlySpan<byte> row = pixels.Slice(y * bitmap.RowBytes, bitmap.Width * bytesPerPixel);
-            for (int offset = 0; offset < row.Length; offset += bytesPerPixel)
-            {
-                ReadOnlySpan<byte> pixel = row.Slice(offset, bytesPerPixel);
-                hasVisiblePixel |= pixel[3] != 0;
-                isSingleColor &= pixel.SequenceEqual(first);
-            }
-        }
-        return (isSingleColor, hasVisiblePixel);
+        return PngImageValidator.Validate(
+            path,
+            capture.Key,
+            capture.Label,
+            _options,
+            capture.Width,
+            capture.Height,
+            capture.Sha256);
     }
 
     private static bool NormalizedHashEquals(string left, string right) =>

@@ -17,6 +17,8 @@ public static class EvidenceManifestReader
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
+    private static readonly VisualEvidenceJsonContext SerializerContext = new(SerializerOptions);
+
     public static async Task<EvidenceManifest> ReadAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -31,9 +33,9 @@ public static class EvidenceManifestReader
             }
 
             await using FileStream stream = File.OpenRead(path);
-            EvidenceManifest? manifest = await JsonSerializer.DeserializeAsync<EvidenceManifest>(
+            EvidenceManifest? manifest = await JsonSerializer.DeserializeAsync(
                 stream,
-                SerializerOptions,
+                SerializerContext.EvidenceManifest,
                 cancellationToken).ConfigureAwait(false);
             return manifest ?? throw new EvidenceValidationException($"Manifest is empty: {path}");
         }

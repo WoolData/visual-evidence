@@ -1,5 +1,5 @@
 name: Visual Evidence
-description: Publish durable, exact-revision before/after screenshots to a GitHub pull request without a browser or file picker.
+description: Publish durable, exact-revision images or before/after screenshots to a GitHub pull request without a browser or file picker.
 author: Wool Data Inc.
 branding:
   icon: image
@@ -7,7 +7,13 @@ branding:
 inputs:
   evidence-root:
     description: Directory containing before/manifest.json, after/manifest.json, and capture images.
-    required: true
+    required: false
+  image-root:
+    description: Directory of PNG images to publish without before/after comparison semantics.
+    required: false
+  images:
+    description: Newline-delimited PNG paths to publish individually.
+    required: false
   summary:
     description: Short reviewer-facing explanation of the visible change.
     required: true
@@ -33,6 +39,16 @@ inputs:
     description: Publish visual-evidence/published commit status. Requires statuses write permission.
     required: false
     default: "false"
+outputs:
+  asset-commit:
+    description: Immutable commit containing the published images.
+    value: ${{ steps.publish.outputs.asset-commit }}
+  capture-count:
+    description: Number of images or before/after capture pairs published.
+    value: ${{ steps.publish.outputs.capture-count }}
+  mode:
+    description: Publication mode, either comparison or images.
+    value: ${{ steps.publish.outputs.mode }}
 runs:
   using: composite
   steps:
@@ -41,9 +57,12 @@ runs:
       with:
         dotnet-version: 10.0.x
     - name: Validate and publish visual evidence
+      id: publish
       shell: pwsh
       env:
         VISUAL_EVIDENCE_ROOT: ${{ inputs.evidence-root }}
+        VISUAL_EVIDENCE_IMAGE_ROOT: ${{ inputs.image-root }}
+        VISUAL_EVIDENCE_IMAGES: ${{ inputs.images }}
         VISUAL_EVIDENCE_SUMMARY: ${{ inputs.summary }}
         VISUAL_EVIDENCE_PR: ${{ inputs.pull-request-number }}
         VISUAL_EVIDENCE_REPOSITORY: ${{ inputs.repository }}
@@ -58,7 +77,23 @@ runs:
           @("--comment-author-login", $env:VISUAL_EVIDENCE_COMMENT_AUTHOR)
         }
 
-        dotnet run `
+        $inputModes = @(
+          -not [string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_ROOT)
+          -not [string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_IMAGE_ROOT)
+          -not [string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_IMAGES)
+        ) | Where-Object { $_ }
+        if ($inputModes.Count -ne 1) {
+          throw "Provide exactly one of evidence-root, image-root, or images."
+        }
+        $inputArgs = if (-not [string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_ROOT)) {
+          @("--evidence-root", $env:VISUAL_EVIDENCE_ROOT)
+        } elseif (-not [string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_IMAGE_ROOT)) {
+          @("--image-root", $env:VISUAL_EVIDENCE_IMAGE_ROOT)
+        } else {
+          @($env:VISUAL_EVIDENCE_IMAGES -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { "--image"; $_ })
+        }
+
+        $result = dotnet run `
           --project (Join-Path $env:GITHUB_ACTION_PATH "src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj") `
           --configuration Release `
           --property:RestoreLockedMode=true `
@@ -66,8 +101,13 @@ runs:
           publish `
           --repository $env:VISUAL_EVIDENCE_REPOSITORY `
           --change-number $env:VISUAL_EVIDENCE_PR `
-          --evidence-root $env:VISUAL_EVIDENCE_ROOT `
+          @inputArgs `
           --summary $env:VISUAL_EVIDENCE_SUMMARY `
           --assets-branch $env:VISUAL_EVIDENCE_ASSETS_BRANCH `
           @commentAuthorArgs `
           --publish-status $env:VISUAL_EVIDENCE_PUBLISH_STATUS
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $published = $result | ConvertFrom-Json
+        "asset-commit=$($published.assetCommit)" >> $env:GITHUB_OUTPUT
+        "capture-count=$($published.captures)" >> $env:GITHUB_OUTPUT
+        "mode=$($published.mode)" >> $env:GITHUB_OUTPUT
