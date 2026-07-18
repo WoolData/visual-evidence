@@ -111,13 +111,121 @@ public sealed class GitHubApiClientTests
         Assert.Equal("/repos/WoolData/example/issues/comments/42", finalPath);
     }
 
-    private static GitHubApiClient CreateClient(HttpMessageHandler handler)
+    [Fact]
+    public async Task PublishOrUpdateAsync_UsesGitHubActionsBotWhenUserEndpointRejectsInstallationToken()
+    {
+        HttpMethod? finalMethod = null;
+        var handler = new RecordingHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path == "/user")
+            {
+                return Json(HttpStatusCode.Forbidden, "{\"message\":\"Resource not accessible by integration\"}");
+            }
+            if (request.Method == HttpMethod.Get && path.EndsWith("/issues/17/comments", StringComparison.Ordinal))
+            {
+                return Json(
+                    HttpStatusCode.OK,
+                    $"[{{\"id\":42,\"body\":\"{ReviewMarkdown.Marker}\",\"user\":{{\"login\":\"github-actions[bot]\"}}}}]");
+            }
+            if (request.Method == HttpMethod.Patch && path.EndsWith("/issues/comments/42", StringComparison.Ordinal))
+            {
+                finalMethod = request.Method;
+                return Json(HttpStatusCode.OK, "{}");
+            }
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+        using var client = CreateClient(handler);
+
+        await client.PublishOrUpdateAsync(17, $"{ReviewMarkdown.Marker}\nnew", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Patch, finalMethod);
+    }
+
+    [Fact]
+    public async Task ReadCommentsAsync_UsesGitHubActionsBotWhenUserEndpointRejectsInstallationToken()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/user" => Json(HttpStatusCode.Forbidden, "{\"message\":\"Resource not accessible by integration\"}"),
+            "/repos/WoolData/example/issues/17/comments" => Json(
+                HttpStatusCode.OK,
+                $"[{{\"id\":42,\"body\":\"{ReviewMarkdown.Marker}\",\"user\":{{\"login\":\"github-actions[bot]\"}}}}]"),
+            _ => throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}"),
+        });
+        using var client = CreateClient(handler);
+
+        IReadOnlyList<string> comments = await client.ReadCommentsAsync(17, TestContext.Current.CancellationToken);
+
+        Assert.Single(comments);
+        Assert.Contains(ReviewMarkdown.Marker, comments[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReadCommentsAsync_DoesNotHideOtherAuthenticationFailures()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/user" => Json(HttpStatusCode.Unauthorized, "{\"message\":\"Bad credentials\"}"),
+            _ => throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}"),
+        });
+        using var client = CreateClient(handler);
+
+        GitHubApiException exception = await Assert.ThrowsAsync<GitHubApiException>(() =>
+            client.ReadCommentsAsync(17, TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task ReadCommentsAsync_DoesNotHideUnrelatedForbiddenResponse()
+    {
+        var handler = new RecordingHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/user" => Json(HttpStatusCode.Forbidden, "{\"message\":\"Forbidden\"}"),
+            _ => throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}"),
+        });
+        using var client = CreateClient(handler);
+
+        GitHubApiException exception = await Assert.ThrowsAsync<GitHubApiException>(() =>
+            client.ReadCommentsAsync(17, TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.Forbidden, exception.StatusCode);
+    }
+
+    [Fact]
+    public async Task PublishOrUpdateAsync_UsesConfiguredCustomAppLoginWithoutUserLookup()
+    {
+        var handler = new RecordingHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Get && path.EndsWith("/issues/17/comments", StringComparison.Ordinal))
+            {
+                return Json(
+                    HttpStatusCode.OK,
+                    $"[{{\"id\":42,\"body\":\"{ReviewMarkdown.Marker}\",\"user\":{{\"login\":\"custom-app[bot]\"}}}}]");
+            }
+            if (request.Method == HttpMethod.Patch && path.EndsWith("/issues/comments/42", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.OK, "{}");
+            }
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+        using var client = CreateClient(handler, "custom-app[bot]");
+
+        await client.PublishOrUpdateAsync(17, $"{ReviewMarkdown.Marker}\nnew", TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(handler.Requests, request => request.EndsWith(" /user", StringComparison.Ordinal));
+    }
+
+    private static GitHubApiClient CreateClient(HttpMessageHandler handler, string? commentAuthorLogin = null)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.github.test/") };
         return new GitHubApiClient(new GitHubOptions
         {
             Repository = "WoolData/example",
             Token = "test-token",
+            CommentAuthorLogin = commentAuthorLogin,
         }, httpClient);
     }
 

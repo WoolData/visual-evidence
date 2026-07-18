@@ -91,7 +91,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Capture before and after
         run: ./your-capture-command --output evidence
-      - uses: WoolData/visual-evidence@v0.1.0
+      - uses: WoolData/visual-evidence@v0.1.1
         with:
           evidence-root: evidence
           summary: Keeps primary actions visible at compact window sizes.
@@ -101,6 +101,8 @@ jobs:
 Pin the Action to a full commit SHA in security-sensitive repositories. The tag above keeps the introductory example readable.
 
 To publish the optional `visual-evidence/published` commit status, grant `statuses: write` and set `publish-status: true`.
+
+The default `GITHUB_TOKEN` and user tokens are both supported. When using a custom GitHub App installation token, set `comment-author-login` to that App's bot login, such as `my-app[bot]`, so repeated runs update only the App's own evidence comment.
 
 ### 4. Use the CLI
 

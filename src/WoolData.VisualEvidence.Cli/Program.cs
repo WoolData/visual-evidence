@@ -80,6 +80,7 @@ internal static class ProgramMain
             Token = token,
             ApiUrl = options.Optional("api-url") ?? Environment.GetEnvironmentVariable("GITHUB_API_URL") ?? "https://api.github.com",
             AssetsBranch = options.Optional("assets-branch") ?? "visual-evidence-assets",
+            CommentAuthorLogin = options.Optional("comment-author-login"),
         };
         using var github = new GitHubApiClient(githubOptions);
         bool publishStatus = options.OptionalBool("publish-status", false);
@@ -116,6 +117,7 @@ internal static class ProgramMain
             Token = ResolveToken(options),
             ApiUrl = options.Optional("api-url") ?? Environment.GetEnvironmentVariable("GITHUB_API_URL") ?? "https://api.github.com",
             AssetsBranch = options.Optional("assets-branch") ?? "visual-evidence-assets",
+            CommentAuthorLogin = options.Optional("comment-author-login"),
         });
         var service = new EvidencePublicationService(repository, github, github, github);
         await service.VerifyAsync(changeNumber, cancellationToken).ConfigureAwait(false);
@@ -199,6 +201,7 @@ internal static class ProgramMain
             Publish options:
               --assets-branch NAME                 Default: visual-evidence-assets
               --api-url URL                        Default: GITHUB_API_URL or api.github.com
+              --comment-author-login LOGIN         Optional custom GitHub App bot login
               --token-environment-variable NAME    Default: GITHUB_TOKEN
               --publish-status true|false          Default: false
 
