@@ -14,11 +14,7 @@ public static class ReviewMarkdown
         AssetPublication publication,
         string summary)
     {
-        string[] repositoryParts = repository.Split('/');
-        if (repositoryParts.Length != 2)
-        {
-            throw new ArgumentException("Repository must use owner/name form.", nameof(repository));
-        }
+        GitHubAssetUrl.ValidateRepository(repository);
 
         var markdown = new StringBuilder();
         markdown.AppendLine(Marker);
@@ -36,8 +32,8 @@ public static class ReviewMarkdown
 
         foreach (PublishedAsset asset in publication.Assets)
         {
-            string beforeUrl = BuildAssetUrl(repositoryParts[0], repositoryParts[1], publication.CommitSha, asset.BeforePath);
-            string afterUrl = BuildAssetUrl(repositoryParts[0], repositoryParts[1], publication.CommitSha, asset.AfterPath);
+            string beforeUrl = GitHubAssetUrl.Build(repository, publication.CommitSha, asset.BeforePath);
+            string afterUrl = GitHubAssetUrl.Build(repository, publication.CommitSha, asset.AfterPath);
             markdown.AppendLine();
             markdown.AppendLine($"### {Escape(asset.Label)}");
             markdown.AppendLine();
@@ -48,11 +44,6 @@ public static class ReviewMarkdown
 
         return markdown.ToString().TrimEnd();
     }
-
-    private static string BuildAssetUrl(string owner, string name, string commit, string path) =>
-        $"https://github.com/{Uri.EscapeDataString(owner)}/{Uri.EscapeDataString(name)}/blob/{commit}/{EscapePath(path)}?raw=true";
-
-    private static string EscapePath(string path) => string.Join('/', path.Split('/').Select(Uri.EscapeDataString));
 
     private static string Escape(string value) => NormalizeSingleLine(value)
         .Replace("\\", "\\\\", StringComparison.Ordinal)
