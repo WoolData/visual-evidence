@@ -162,6 +162,13 @@ visual-evidence review `
   --ai-provider gemini `
   --ai-model MODEL_ID `
   --json
+
+visual-evidence publish `
+  --repository owner/repository `
+  --change-number 123 `
+  --evidence-root ./evidence `
+  --ai-review ./ai-review-v1.json `
+  --summary "Before and after with advisory visual review"
 ```
 
 If exactly one default provider key is set, the CLI infers that provider. If
@@ -185,6 +192,11 @@ Protocol references: [Claude structured outputs](https://platform.claude.com/doc
 [xAI structured outputs](https://docs.x.ai/developers/model-capabilities/text/structured-outputs),
 [Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), and
 [Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output).
+
+`publish --ai-review` revalidates those hashes, stores the full review JSON and
+normalized screenshots in the same append-only asset commit, and renders a
+bounded advisory digest in the PR comment. The after-image alt text uses the
+review description. Publication without `--ai-review` remains fully supported.
 
 Direct API providers are the unattended CI path. Optional adapters for existing
 Codex CLI and Claude Code subscription logins are tracked separately in

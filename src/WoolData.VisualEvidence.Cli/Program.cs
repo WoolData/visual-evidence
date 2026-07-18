@@ -234,11 +234,19 @@ internal static class ProgramMain
         if (evidenceRoot is not null)
         {
             EnsureNoSimpleImages(options);
-            AssetPublication publication = await service.PublishAsync(
-                changeNumber,
-                evidenceRoot,
-                summary,
-                cancellationToken).ConfigureAwait(false);
+            string? aiReview = options.Optional("ai-review");
+            AssetPublication publication = aiReview is null
+                ? await service.PublishAsync(
+                    changeNumber,
+                    evidenceRoot,
+                    summary,
+                    cancellationToken).ConfigureAwait(false)
+                : await service.PublishWithAiReviewAsync(
+                    changeNumber,
+                    evidenceRoot,
+                    aiReview,
+                    summary,
+                    cancellationToken).ConfigureAwait(false);
             WriteJson(
                 new AgentPublishResult(
                     true,
@@ -249,6 +257,11 @@ internal static class ProgramMain
                     publication.Assets.Count),
                 AgentProtocolJsonContext.Default.AgentPublishResult);
             return 0;
+        }
+
+        if (options.Optional("ai-review") is not null)
+        {
+            throw new ArgumentException("--ai-review currently requires manifest-backed --evidence-root comparison mode.");
         }
 
         string[] images = ResolveImages(options);
@@ -349,7 +362,7 @@ internal static class ProgramMain
                 [
                     "visual-evidence doctor --repository OWNER/REPO --change-number N --json",
                     "visual-evidence review --evidence-root PATH --output ai-review-v1.json --ai-model MODEL --json",
-                    "visual-evidence publish --repository OWNER/REPO --change-number N --evidence-root PATH --summary TEXT --json",
+                    "visual-evidence publish --repository OWNER/REPO --change-number N --evidence-root PATH --ai-review ai-review-v1.json --summary TEXT --json",
                     "visual-evidence verify --repository OWNER/REPO --change-number N --json",
                 ],
                 new Dictionary<string, int>(StringComparer.Ordinal)
@@ -446,7 +459,7 @@ internal static class ProgramMain
         {
             "validate" => ["evidence-root", "expected-base", "expected-head", "image-root", "image", .. commonValidation],
             "review" => ["evidence-root", "expected-base", "expected-head", "output", "task", "ai-provider", "ai-model", "ai-base-url", "ai-allow-custom-egress", "ai-key-environment-variable", "ai-no-auth", "ai-max-edge", "prompt-file", .. commonValidation],
-            "publish" => ["evidence-root", "image-root", "image", "summary", "publish-status", .. github, .. commonValidation],
+            "publish" => ["evidence-root", "image-root", "image", "ai-review", "summary", "publish-status", .. github, .. commonValidation],
             "verify" or "doctor" => github,
             "describe" => ["json"],
             "environment-key" => [.. environment, "json"],
@@ -668,6 +681,7 @@ internal static class ProgramMain
               --comment-author-login LOGIN         Optional custom GitHub App bot login
               --token-environment-variable NAME    Default: GITHUB_TOKEN
               --publish-status true|false          Default: false
+              --ai-review PATH                     Optional hash-bound ai-review-v1 JSON; comparison mode only
 
             AI review options:
               --task compare                       Default and only current task

@@ -23,6 +23,7 @@ For optional advisory comparison narration, validate first, set exactly one of
 
 ```text
 visual-evidence review --evidence-root evidence --output ai-review-v1.json --ai-model MODEL --json
+visual-evidence publish --repository OWNER/REPO --change-number N --evidence-root evidence --ai-review ai-review-v1.json --summary "Before and after" --json
 ```
 
 If multiple keys exist, add `--ai-provider anthropic|openai-compatible|grok|gemini`;
