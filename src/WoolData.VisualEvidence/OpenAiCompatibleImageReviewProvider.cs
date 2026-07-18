@@ -1,8 +1,6 @@
 // Copyright (c) 2026 Wool Data Inc. Licensed under the MIT License.
 
 using System.Net.Http.Headers;
-using System.Globalization;
-using System.Text;
 
 namespace WoolData.VisualEvidence;
 
@@ -21,9 +19,12 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
         }
         if (string.IsNullOrWhiteSpace(options.ProviderName) ||
             options.ProviderName.Length > 100 ||
-            ContainsUnsafeProviderNameCharacter(options.ProviderName))
+            options.ProviderName.Any(static character =>
+                !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_' or '.')))
         {
-            throw new ArgumentException("OpenAI-compatible provider name must contain 1 to 100 printable characters.", nameof(options));
+            throw new ArgumentException(
+                "OpenAI-compatible provider name must contain 1 to 100 ASCII letters, digits, periods, underscores, or hyphens.",
+                nameof(options));
         }
 
         _options = options;
@@ -31,34 +32,6 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
         _httpClient.BaseAddress = baseUri;
-    }
-
-    private static bool ContainsUnsafeProviderNameCharacter(string value)
-    {
-        for (int index = 0; index < value.Length;)
-        {
-            if (!Rune.TryGetRuneAt(value, index, out Rune rune))
-            {
-                return true;
-            }
-
-            UnicodeCategory category = Rune.GetUnicodeCategory(rune);
-            int scalar = rune.Value;
-            bool isVariationSelector =
-                (scalar >= 0x180B && scalar <= 0x180D) ||
-                scalar == 0x180F ||
-                (scalar >= 0xFE00 && scalar <= 0xFE0F) ||
-                (scalar >= 0xE0100 && scalar <= 0xE01EF);
-            if (category is UnicodeCategory.Control or UnicodeCategory.Format ||
-                isVariationSelector)
-            {
-                return true;
-            }
-
-            index += rune.Utf16SequenceLength;
-        }
-
-        return false;
     }
 
     public async Task<AiReviewDocument> ReviewAsync(

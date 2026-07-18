@@ -259,9 +259,9 @@ public sealed class AiImageReviewProviderTests
     }
 
     [Theory]
-    [InlineData("Café")]
-    [InlineData("レビュー")]
-    public void Provider_AcceptsVisibleUnicodeProviderNames(string providerName)
+    [InlineData("openai-compatible")]
+    [InlineData("gateway_1.2")]
+    public void Provider_AcceptsPortableProviderNames(string providerName)
     {
         using var provider = new OpenAiCompatibleImageReviewProvider(
             new OpenAiCompatibleImageReviewOptions
