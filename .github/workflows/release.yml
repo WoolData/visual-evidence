@@ -85,7 +85,7 @@ jobs:
           "archive=artifacts/$archive" >> $env:GITHUB_OUTPUT
           "checksum=artifacts/$archive.sha256" >> $env:GITHUB_OUTPUT
       - name: Attest native archive
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: ${{ steps.package.outputs.archive }}
       - name: Upload native release assets
@@ -122,7 +122,7 @@ jobs:
           Set-Content "$($package.FullName).sha256" "$hash  $($package.Name)" -NoNewline
           "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
       - name: Attest tool package
-        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: ${{ steps.package.outputs.path }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
