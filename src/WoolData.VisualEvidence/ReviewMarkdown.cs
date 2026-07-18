@@ -169,6 +169,7 @@ public static class ReviewMarkdown
         markdown.ToString().Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
 
     private static string Escape(string value) => NormalizeSingleLine(value)
+        .Replace("&", "&amp;", StringComparison.Ordinal)
         .Replace("\\", "\\\\", StringComparison.Ordinal)
         .Replace("[", "\\[", StringComparison.Ordinal)
         .Replace("]", "\\]", StringComparison.Ordinal)
@@ -187,13 +188,14 @@ public static class ReviewMarkdown
         .Replace("(", string.Empty, StringComparison.Ordinal)
         .Replace(")", string.Empty, StringComparison.Ordinal)
         .Replace("|", "\\|", StringComparison.Ordinal)
+        .Replace("\u0060", "&#96;", StringComparison.Ordinal)
         .Replace("@", "&#64;", StringComparison.Ordinal);
 
     private static string EscapeAi(string value) => Escape(value)
         .Replace("https://", "hxxps://", StringComparison.OrdinalIgnoreCase)
         .Replace("http://", "hxxp://", StringComparison.OrdinalIgnoreCase)
         .Replace("://", "&#58;//", StringComparison.Ordinal)
-        .Replace("www.", "www[.]", StringComparison.OrdinalIgnoreCase);
+        .Replace("www.", "www\\[.\\]", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeSingleLine(string value) => string.Join(
         ' ',

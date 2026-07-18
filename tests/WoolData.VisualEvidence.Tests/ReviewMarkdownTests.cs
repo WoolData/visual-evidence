@@ -100,8 +100,8 @@ public sealed class ReviewMarkdownTests
                 AiReviewDocumentCodecTests.CreateDocument().Reviews.Single() with
                 {
                     Key = "home",
-                    AltText = "Settings screen | after <save> &lt;script&gt; action moved",
-                    Summary = "Save moved below the form. @reviewers See https://evil.example/path and ftp://files.example/path.",
+                    AltText = "Settings `screen` | after <save> &lt;script&gt; action moved",
+                    Summary = "Save moved below the form. @reviewers See https://evil.example/path, www.evil.example, &lt;script&gt;, and ftp://files.example/path.",
                     Issues =
                     [
                         new AiReviewIssue
@@ -127,7 +127,7 @@ public sealed class ReviewMarkdownTests
         Assert.Contains("Machine-generated observations only", markdown, StringComparison.Ordinal);
         Assert.Contains($"blob/{assetCommit}/pr-7/{head}/ai-review-v1.json?raw=true", markdown, StringComparison.Ordinal);
         Assert.Contains(
-            "Settings screen \\| after &lt;save&gt; &amp;lt;script&amp;gt; action moved",
+            "Settings &#96;screen&#96; \\| after &lt;save&gt; &amp;lt;script&amp;gt; action moved",
             markdown,
             StringComparison.Ordinal);
         Assert.DoesNotContain("<save>", markdown, StringComparison.Ordinal);
@@ -138,6 +138,9 @@ public sealed class ReviewMarkdownTests
         Assert.DoesNotContain("https://evil.example", markdown, StringComparison.Ordinal);
         Assert.Contains("hxxps&#58;//evil.example", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("hxxps://evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("www\\[.\\]evil.example", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("www[.]evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("&amp;lt;script&amp;gt;", markdown, StringComparison.Ordinal);
         Assert.Contains("ftp&#58;//files.example", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("ftp://files.example", markdown, StringComparison.Ordinal);
         Assert.Contains("&#96;&#64;reviewers", markdown, StringComparison.Ordinal);
