@@ -147,6 +147,36 @@ dotnet run --project src/WoolData.VisualEvidence.Cli -- verify `
 
 Tokens are read only from the named environment variable and are never accepted as command-line values.
 
+### Optional advisory AI review
+
+`review` is an optional stage between validation and publication. It compares
+each validated before/after pair in one multimodal request and writes strict,
+source-hash-bound `ai-review-v1` JSON. It never changes the full-resolution
+evidence, and its output is advisory rather than a merge decision.
+
+```powershell
+$env:ANTHROPIC_API_KEY = "..." # or OPENAI_API_KEY
+visual-evidence review `
+  --evidence-root ./evidence `
+  --output ./ai-review-v1.json `
+  --ai-model MODEL_ID `
+  --json
+```
+
+If exactly one default provider key is set, the CLI infers that provider. If
+both are set, `--ai-provider anthropic|openai-compatible` is required because
+the choice controls where screenshots leave the machine. Credentials are read
+only from environment variables. An explicitly selected OpenAI-compatible
+loopback server may use `--ai-no-auth true`; plaintext HTTP is refused for
+non-loopback hosts. Use `--prompt-file` to override the injection-resistant
+default prompt. The effective prompt hash, provider, model, transport edge, and
+validated source-image hashes are recorded in the output.
+
+Direct API providers are the unattended CI path. Optional adapters for existing
+Codex CLI and Claude Code subscription logins are tracked separately in
+[#41](https://github.com/WoolData/visual-evidence/issues/41); Visual Evidence
+will not copy or manage those CLIs' OAuth credentials.
+
 ## Manifest Contract
 
 Each snapshot manifest contains:

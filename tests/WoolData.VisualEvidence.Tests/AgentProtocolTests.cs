@@ -28,9 +28,9 @@ public sealed class AgentProtocolTests
             Assert.Equal("GITHUB_TOKEN", document.RootElement.GetProperty("tokenEnvironmentVariable").GetString());
             Assert.True(document.RootElement.GetProperty("republishIsIdempotent").GetBoolean());
             Assert.Equal(
-                3,
+                5,
                 document.RootElement.GetProperty("environmentVariables").EnumerateObject().Count());
-            Assert.Equal(3, document.RootElement.GetProperty("workflow").GetArrayLength());
+            Assert.Equal(4, document.RootElement.GetProperty("workflow").GetArrayLength());
             JsonElement.ArrayEnumerator publishOptions = document.RootElement
                 .GetProperty("commands")
                 .GetProperty("publish")
@@ -190,6 +190,43 @@ public sealed class AgentProtocolTests
         finally
         {
             Console.SetError(original);
+        }
+    }
+
+    [Fact]
+    public async Task Review_RequiresExplicitProviderWhenBothDefaultKeysExist()
+    {
+        using var fixture = new EvidenceFixture();
+        string? originalAnthropic = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
+        string? originalOpenAi = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        TextWriter originalError = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "anthropic-secret");
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", "openai-secret");
+            Console.SetError(output);
+
+            int exitCode = await ProgramMain.RunAsync([
+                "review",
+                "--evidence-root", fixture.Root,
+                "--output", Path.Combine(fixture.Root, "review.json"),
+                "--ai-model", "test-model",
+                "--json",
+            ]);
+
+            Assert.Equal(2, exitCode);
+            using JsonDocument document = JsonDocument.Parse(output.ToString());
+            Assert.Contains(
+                "specify --ai-provider",
+                document.RootElement.GetProperty("error").GetProperty("message").GetString(),
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(originalError);
+            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", originalAnthropic);
+            Environment.SetEnvironmentVariable("OPENAI_API_KEY", originalOpenAi);
         }
     }
 

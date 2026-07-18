@@ -12,6 +12,7 @@ using System.Text.Json.Serialization;
 [JsonSerializable(typeof(AgentDoctorResult))]
 [JsonSerializable(typeof(AgentManifestResult))]
 [JsonSerializable(typeof(AgentEnvironmentKeyResult))]
+[JsonSerializable(typeof(AgentReviewResult))]
 [JsonSerializable(typeof(AgentDescription))]
 [JsonSerializable(typeof(AgentErrorEnvelope))]
 internal sealed partial class AgentProtocolJsonContext : JsonSerializerContext;
@@ -45,6 +46,15 @@ internal sealed record AgentDoctorResult(
 internal sealed record AgentManifestResult(bool Ok, string Output, int Captures, string CompatibilityKey);
 
 internal sealed record AgentEnvironmentKeyResult(bool Ok, string CompatibilityKey);
+
+internal sealed record AgentReviewResult(
+    bool Ok,
+    string Task,
+    string Provider,
+    string Model,
+    string Output,
+    int Captures,
+    string PromptSha256);
 
 internal sealed record AgentDescription(
     string Name,

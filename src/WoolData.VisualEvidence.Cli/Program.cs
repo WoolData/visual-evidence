@@ -33,7 +33,7 @@ internal static class ProgramMain
             }
 
             string command = args[0].ToLowerInvariant();
-            if (command is not ("validate" or "publish" or "verify" or "doctor" or "describe" or "environment-key" or "manifest"))
+            if (command is not ("validate" or "review" or "publish" or "verify" or "doctor" or "describe" or "environment-key" or "manifest"))
             {
                 throw new ArgumentException($"Unknown command '{args[0]}'. Run 'visual-evidence --help'.");
             }
@@ -42,6 +42,7 @@ internal static class ProgramMain
             return command switch
             {
                 "validate" => await ValidateAsync(options, cancellation.Token).ConfigureAwait(false),
+                "review" => await ReviewAsync(options, cancellation.Token).ConfigureAwait(false),
                 "publish" => await PublishAsync(options, cancellation.Token).ConfigureAwait(false),
                 "verify" => await VerifyAsync(options, cancellation.Token).ConfigureAwait(false),
                 "doctor" => await DoctorAsync(options, cancellation.Token).ConfigureAwait(false),
@@ -56,7 +57,7 @@ internal static class ProgramMain
             WriteError("canceled", "Canceled.", args.Contains("--json", StringComparer.OrdinalIgnoreCase));
             return 130;
         }
-        catch (Exception ex) when (ex is ArgumentException or EvidenceValidationException or GitHubApiException or IOException)
+        catch (Exception ex) when (ex is ArgumentException or EvidenceValidationException or AiReviewProviderException or GitHubApiException or IOException)
         {
             string code = ErrorCode(ex);
             WriteError(code, ex.Message, args.Contains("--json", StringComparer.OrdinalIgnoreCase));
@@ -67,6 +68,79 @@ internal static class ProgramMain
             WriteError("unexpected_error", "Unexpected failure.", args.Contains("--json", StringComparer.OrdinalIgnoreCase));
             return 1;
         }
+    }
+
+    private static async Task<int> ReviewAsync(OptionReader options, CancellationToken cancellationToken)
+    {
+        string task = (options.Optional("task") ?? "compare").ToLowerInvariant();
+        if (task != "compare")
+        {
+            throw new ArgumentException("--task currently supports compare only.");
+        }
+
+        string evidenceRoot = options.Required("evidence-root");
+        string output = Path.GetFullPath(options.Required("output"));
+        string prompt = ReadPrompt(options.Optional("prompt-file"));
+        int maximumEdge = options.OptionalInt("ai-max-edge", AiReviewTransportImageFactory.DefaultMaximumEdge);
+        ValidatedEvidencePair evidence = await new EvidencePairValidator(BuildValidationOptions(options)).ValidateAsync(
+            evidenceRoot,
+            options.Optional("expected-base"),
+            options.Optional("expected-head"),
+            cancellationToken).ConfigureAwait(false);
+        string promptHash = AiReviewPrompt.CalculateSha256(prompt);
+        var request = new AiReviewRequest(
+            task,
+            prompt,
+            promptHash,
+            maximumEdge,
+            AiReviewTransportImageFactory.CreateComparison(evidence, maximumEdge));
+
+        string providerName = ResolveAiProvider(options);
+        AiReviewDocument review;
+        if (providerName == "anthropic")
+        {
+            if (options.OptionalBool("ai-no-auth", false))
+            {
+                throw new ArgumentException("--ai-no-auth is supported only with --ai-provider openai-compatible.");
+            }
+            using var provider = new AnthropicImageReviewProvider(new AnthropicImageReviewOptions
+            {
+                ApiKey = ResolveAiKey(options, "ANTHROPIC_API_KEY", allowNoAuth: false),
+                Model = options.Required("ai-model"),
+                BaseUri = ResolveAiBaseUri(options, "https://api.anthropic.com/"),
+            });
+            review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            bool noAuth = options.OptionalBool("ai-no-auth", false);
+            Uri baseUri = ResolveAiBaseUri(options, "https://api.openai.com/v1/");
+            if (noAuth && !baseUri.IsLoopback)
+            {
+                throw new ArgumentException("--ai-no-auth is allowed only for a loopback --ai-base-url.");
+            }
+            using var provider = new OpenAiCompatibleImageReviewProvider(new OpenAiCompatibleImageReviewOptions
+            {
+                ApiKey = noAuth ? null : ResolveAiKey(options, "OPENAI_API_KEY", allowNoAuth: false),
+                Model = options.Required("ai-model"),
+                BaseUri = baseUri,
+            });
+            review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
+        AiReviewProvenanceValidator.ValidateComparison(review, evidence);
+        await WriteFileAtomicallyAsync(output, AiReviewDocumentCodec.Serialize(review), cancellationToken).ConfigureAwait(false);
+        WriteJson(
+            new AgentReviewResult(
+                true,
+                review.Task,
+                review.Provider,
+                review.Model,
+                output,
+                review.Reviews.Count,
+                review.PromptSha256),
+            AgentProtocolJsonContext.Default.AgentReviewResult);
+        return 0;
     }
 
     private static string Version =>
@@ -224,7 +298,7 @@ internal static class ProgramMain
                 "visual-evidence",
                 Version,
                 1,
-                "Publish existing PNG images as durable, exact-revision pull-request evidence.",
+                "Validate and publish PNGs as exact-revision pull-request evidence, with optional advisory AI review.",
                 true,
                 "GITHUB_TOKEN",
                 true,
@@ -233,11 +307,14 @@ internal static class ProgramMain
                     ["GITHUB_TOKEN"] = "Required for doctor, publish, and verify; never pass tokens as arguments.",
                     ["GITHUB_REPOSITORY"] = "Optional OWNER/REPO default for --repository.",
                     ["GITHUB_API_URL"] = "Optional API endpoint default for --api-url.",
+                    ["ANTHROPIC_API_KEY"] = "Default Anthropic review credential; never pass keys as arguments.",
+                    ["OPENAI_API_KEY"] = "Default OpenAI-compatible review credential; never pass keys as arguments.",
                 },
                 new Dictionary<string, AgentCommandDescription>(StringComparer.Ordinal)
                 {
                     ["publish"] = new(["evidence-root", "image-root", "image"], ["summary", "change-number", "GITHUB_TOKEN"], DescribeOptions("publish")),
                     ["validate"] = new(["evidence-root", "image-root", "image"], Options: DescribeOptions("validate")),
+                    ["review"] = new(["compare"], ["evidence-root", "output", "ai-model"], DescribeOptions("review"), "Produce optional advisory ai-review-v1 JSON from validated evidence."),
                     ["verify"] = new(Requires: ["change-number", "GITHUB_TOKEN"], Options: DescribeOptions("verify")),
                     ["doctor"] = new(Requires: ["change-number", "GITHUB_TOKEN"], Options: DescribeOptions("doctor")),
                     ["manifest"] = new(Options: DescribeOptions("manifest"), Purpose: "Build a structured before/after manifest."),
@@ -245,7 +322,8 @@ internal static class ProgramMain
                 },
                 [
                     "visual-evidence doctor --repository OWNER/REPO --change-number N --json",
-                    "visual-evidence publish --repository OWNER/REPO --change-number N --image PATH --summary TEXT --json",
+                    "visual-evidence review --evidence-root PATH --output ai-review-v1.json --ai-model MODEL --json",
+                    "visual-evidence publish --repository OWNER/REPO --change-number N --evidence-root PATH --summary TEXT --json",
                     "visual-evidence verify --repository OWNER/REPO --change-number N --json",
                 ],
                 new Dictionary<string, int>(StringComparer.Ordinal)
@@ -255,7 +333,7 @@ internal static class ProgramMain
                     ["invalidArguments"] = 2,
                     ["canceled"] = 130,
                 },
-                ["invalid_arguments", "invalid_evidence", "github_api_error", "io_error", "unexpected_error", "canceled"]),
+                ["invalid_arguments", "invalid_evidence", "ai_provider_error", "github_api_error", "io_error", "unexpected_error", "canceled"]),
             AgentProtocolJsonContext.Default.AgentDescription);
         return 0;
     }
@@ -341,6 +419,7 @@ internal static class ProgramMain
         return command switch
         {
             "validate" => ["evidence-root", "expected-base", "expected-head", "image-root", "image", .. commonValidation],
+            "review" => ["evidence-root", "expected-base", "expected-head", "output", "task", "ai-provider", "ai-model", "ai-base-url", "ai-key-environment-variable", "ai-no-auth", "ai-max-edge", "prompt-file", .. commonValidation],
             "publish" => ["evidence-root", "image-root", "image", "summary", "publish-status", .. github, .. commonValidation],
             "verify" or "doctor" => github,
             "describe" => ["json"],
@@ -363,6 +442,7 @@ internal static class ProgramMain
     {
         ArgumentException => "invalid_arguments",
         EvidenceValidationException => "invalid_evidence",
+        AiReviewProviderException => "ai_provider_error",
         GitHubApiException => "github_api_error",
         IOException => "io_error",
         _ => "unexpected_error",
@@ -418,6 +498,87 @@ internal static class ProgramMain
             : token;
     }
 
+    private static string ResolveAiProvider(OptionReader options)
+    {
+        string? explicitProvider = options.Optional("ai-provider")?.ToLowerInvariant();
+        if (explicitProvider is not null && explicitProvider is not ("anthropic" or "openai-compatible"))
+        {
+            throw new ArgumentException("--ai-provider must be anthropic or openai-compatible.");
+        }
+        if (explicitProvider is not null)
+        {
+            return explicitProvider;
+        }
+
+        bool anthropic = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
+        bool openAi = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
+        if (anthropic == openAi)
+        {
+            throw new ArgumentException(
+                anthropic
+                    ? "Both ANTHROPIC_API_KEY and OPENAI_API_KEY are set; specify --ai-provider to choose the screenshot egress destination."
+                    : "No AI provider credential was found; set ANTHROPIC_API_KEY or OPENAI_API_KEY, or specify --ai-provider openai-compatible --ai-no-auth true for a loopback provider.");
+        }
+        return anthropic ? "anthropic" : "openai-compatible";
+    }
+
+    private static string ResolveAiKey(OptionReader options, string defaultVariable, bool allowNoAuth)
+    {
+        string variable = options.Optional("ai-key-environment-variable") ?? defaultVariable;
+        string? key = Environment.GetEnvironmentVariable(variable);
+        if (string.IsNullOrWhiteSpace(key) && !allowNoAuth)
+        {
+            throw new ArgumentException($"Environment variable '{variable}' does not contain an AI provider credential.");
+        }
+        return key ?? string.Empty;
+    }
+
+    private static Uri ResolveAiBaseUri(OptionReader options, string fallback)
+    {
+        string value = options.Optional("ai-base-url") ?? fallback;
+        return Uri.TryCreate(value.EndsWith("/", StringComparison.Ordinal) ? value : $"{value}/", UriKind.Absolute, out Uri? uri)
+            ? uri
+            : throw new ArgumentException("--ai-base-url must be an absolute URL.");
+    }
+
+    private static string ReadPrompt(string? path)
+    {
+        if (path is null)
+        {
+            return AiReviewPrompts.Compare;
+        }
+        var file = new FileInfo(path);
+        if (!file.Exists || file.Length is <= 0 or > 64 * 1024)
+        {
+            throw new ArgumentException("--prompt-file must exist and contain no more than 65536 bytes.");
+        }
+        string prompt = File.ReadAllText(file.FullName);
+        if (string.IsNullOrWhiteSpace(prompt) || prompt.Contains('\0'))
+        {
+            throw new ArgumentException("--prompt-file must contain non-empty text without NUL characters.");
+        }
+        return prompt;
+    }
+
+    private static async Task WriteFileAtomicallyAsync(string path, byte[] bytes, CancellationToken cancellationToken)
+    {
+        string? directory = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            throw new ArgumentException("The --output parent directory must exist.");
+        }
+        string temporary = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            await File.WriteAllBytesAsync(temporary, bytes, cancellationToken).ConfigureAwait(false);
+            File.Move(temporary, path, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
+    }
+
     private static void PrintHelp()
     {
         Console.WriteLine("""
@@ -426,6 +587,7 @@ internal static class ProgramMain
             Commands:
               validate --evidence-root PATH [--expected-base SHA] [--expected-head SHA]
               validate --image PATH [--image PATH ...] | --image-root PATH
+              review   --evidence-root PATH --output PATH --ai-model MODEL [--ai-provider NAME]
               publish  --repository OWNER/REPO --change-number N --evidence-root PATH --summary TEXT
               publish  --repository OWNER/REPO --change-number N --image PATH [--image PATH ...] --summary TEXT
               publish  --repository OWNER/REPO --change-number N --image-root PATH --summary TEXT
@@ -447,6 +609,16 @@ internal static class ProgramMain
               --comment-author-login LOGIN         Optional custom GitHub App bot login
               --token-environment-variable NAME    Default: GITHUB_TOKEN
               --publish-status true|false          Default: false
+
+            AI review options:
+              --task compare                       Default and only current task
+              --ai-provider NAME                   anthropic or openai-compatible; inferred from one default key
+              --ai-model MODEL                     Required; no moving model default
+              --ai-base-url URL                    Optional provider endpoint override
+              --ai-key-environment-variable NAME  Optional credential environment variable override
+              --ai-no-auth true|false              Loopback OpenAI-compatible providers only
+              --ai-max-edge N                      Default: 1568; transport copy only
+              --prompt-file PATH                   Optional prompt override; maximum 65536 bytes
 
             Validation limits:
               --maximum-image-bytes N              Default: 10485760

@@ -18,6 +18,17 @@ visual-evidence publish --repository OWNER/REPO --change-number N --evidence-roo
 
 `--image` is repeatable. Use the manifest-backed mode when before/after provenance and capture-environment compatibility matter.
 
+For optional advisory comparison narration, validate first, set exactly one of
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`, then run:
+
+```text
+visual-evidence review --evidence-root evidence --output ai-review-v1.json --ai-model MODEL --json
+```
+
+If both keys exist, add `--ai-provider`; never let an agent guess the screenshot
+egress destination. AI review is advisory and publication must still work when
+it is skipped or fails.
+
 5. Run `visual-evidence verify --repository OWNER/REPO --change-number N --json`.
 
 Stop on a nonzero exit code or `"ok":false`. Report the compact JSON result; do not paste normal command logs.
