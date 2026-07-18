@@ -40,7 +40,7 @@ jobs:
       - run: dotnet list VisualEvidence.slnx package --vulnerable --include-transitive
       - run: dotnet list VisualEvidence.slnx package --deprecated --include-transitive
 
-  pack:
+  pack-platform:
     name: pack (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -63,6 +63,21 @@ jobs:
           $tool = Join-Path artifacts/tool $(if ($IsWindows) { 'visual-evidence.exe' } else { 'visual-evidence' })
           $description = & $tool describe --json | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $description.protocolVersion -ne 1) { throw 'Installed tool smoke test failed.' }
+
+  pack:
+    name: pack
+    if: always()
+    needs: [pack-platform]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every package platform
+        shell: pwsh
+        env:
+          PACKAGE_RESULT: ${{ needs.pack-platform.result }}
+        run: |
+          if ($env:PACKAGE_RESULT -ne 'success') {
+            throw "Package platform matrix did not pass: $env:PACKAGE_RESULT"
+          }
 
   native-aot:
     name: native AOT (${{ matrix.rid }})
