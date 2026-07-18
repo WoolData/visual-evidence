@@ -27,6 +27,9 @@ public sealed class SchemaContractTests
         string schemaPath = Path.Combine(FindRepositoryRoot(), "schema", "ai-review-v1.schema.json");
         using JsonDocument schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
 
+        Assert.Equal(
+            "https://github.com/WoolData/visual-evidence/schema/ai-review-v1.schema.json",
+            schema.RootElement.GetProperty("$id").GetString());
         Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(1, schema.RootElement
             .GetProperty("properties")

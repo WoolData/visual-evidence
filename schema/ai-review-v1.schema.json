@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/WoolData/visual-evidence/blob/main/schema/ai-review-v1.schema.json",
+  "$id": "https://github.com/WoolData/visual-evidence/schema/ai-review-v1.schema.json",
   "title": "Visual Evidence AI Review v1",
   "type": "object",
   "additionalProperties": false,
