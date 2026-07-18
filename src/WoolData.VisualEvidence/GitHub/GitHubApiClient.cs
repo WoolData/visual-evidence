@@ -304,8 +304,26 @@ public sealed class GitHubApiClient :
         {
             return _login;
         }
-        using JsonDocument user = await SendJsonAsync(HttpMethod.Get, "user", null, cancellationToken).ConfigureAwait(false);
-        _login = RequiredString(user.RootElement, "login");
+
+        if (!string.IsNullOrWhiteSpace(_options.CommentAuthorLogin))
+        {
+            _login = _options.CommentAuthorLogin.Trim();
+            return _login;
+        }
+
+        try
+        {
+            using JsonDocument user = await SendJsonAsync(HttpMethod.Get, "user", null, cancellationToken).ConfigureAwait(false);
+            _login = RequiredString(user.RootElement, "login");
+        }
+        catch (GitHubApiException ex) when (
+            ex.StatusCode == HttpStatusCode.Forbidden &&
+            ex.Message.Contains("Resource not accessible by integration", StringComparison.OrdinalIgnoreCase))
+        {
+            // GITHUB_TOKEN is an installation token, which cannot call GET /user.
+            _login = "github-actions[bot]";
+        }
+
         return _login;
     }
 

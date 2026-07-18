@@ -12,5 +12,7 @@ public sealed record GitHubOptions
 
     public string AssetsBranch { get; init; } = "visual-evidence-assets";
 
+    public string? CommentAuthorLogin { get; init; }
+
     public int MaximumPublishAttempts { get; init; } = 3;
 }

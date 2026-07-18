@@ -20,8 +20,11 @@ inputs:
     required: false
     default: ${{ github.repository }}
   github-token:
-    description: Token with repository contents and pull-request comment write access.
+    description: GITHUB_TOKEN or a user token with repository contents and pull-request comment write access.
     required: true
+  comment-author-login:
+    description: Login used to find this publisher's existing comment. Override for a custom GitHub App token.
+    required: false
   assets-branch:
     description: Protected append-only branch used to retain evidence commits.
     required: false
@@ -45,9 +48,16 @@ runs:
         VISUAL_EVIDENCE_PR: ${{ inputs.pull-request-number }}
         VISUAL_EVIDENCE_REPOSITORY: ${{ inputs.repository }}
         VISUAL_EVIDENCE_ASSETS_BRANCH: ${{ inputs.assets-branch }}
+        VISUAL_EVIDENCE_COMMENT_AUTHOR: ${{ inputs.comment-author-login }}
         VISUAL_EVIDENCE_PUBLISH_STATUS: ${{ inputs.publish-status }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
+        $commentAuthorArgs = if ([string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_COMMENT_AUTHOR)) {
+          @()
+        } else {
+          @("--comment-author-login", $env:VISUAL_EVIDENCE_COMMENT_AUTHOR)
+        }
+
         dotnet run `
           --project (Join-Path $env:GITHUB_ACTION_PATH "src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj") `
           --configuration Release `
@@ -59,4 +69,5 @@ runs:
           --evidence-root $env:VISUAL_EVIDENCE_ROOT `
           --summary $env:VISUAL_EVIDENCE_SUMMARY `
           --assets-branch $env:VISUAL_EVIDENCE_ASSETS_BRANCH `
+          @commentAuthorArgs `
           --publish-status $env:VISUAL_EVIDENCE_PUBLISH_STATUS
