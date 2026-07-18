@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Evidence"
+  short_description: "Publish PNG evidence into pull requests"
+  default_prompt: "Publish these screenshots as durable visual evidence in the target pull request, then verify the evidence is current."

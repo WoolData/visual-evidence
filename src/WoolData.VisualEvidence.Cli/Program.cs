@@ -311,8 +311,9 @@ internal static class ProgramMain
     {
         if (json)
         {
+            string compactMessage = message.Length <= 400 ? message : $"{message[..397]}...";
             Console.Error.WriteLine(JsonSerializer.Serialize(
-                new AgentErrorEnvelope(false, new AgentError(code, message)),
+                new AgentErrorEnvelope(false, new AgentError(code, compactMessage)),
                 AgentProtocolJsonContext.Default.AgentErrorEnvelope));
         }
         else
