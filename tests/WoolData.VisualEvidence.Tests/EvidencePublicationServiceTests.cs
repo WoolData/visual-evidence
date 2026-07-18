@@ -19,6 +19,21 @@ public sealed class EvidencePublicationServiceTests
     }
 
     [Fact]
+    public async Task VerifyAsync_AcceptsCarriageReturnLineFeedComments()
+    {
+        string head = new('2', 40);
+        string mergeBase = new('1', 40);
+        string assetCommit = new('5', 40);
+        string crlfComment = BuildComment(head, mergeBase, assetCommit).Replace("\n", "\r\n", StringComparison.Ordinal);
+        var provider = new FakeProvider(
+            new ChangeRequestRevision(9, head, new string('3', 40), mergeBase),
+            new[] { crlfComment });
+        var service = new EvidencePublicationService("WoolData/example", provider, provider, provider);
+
+        await service.VerifyAsync(9, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task VerifyAsync_RejectsStaleHead()
     {
         string head = new('2', 40);
