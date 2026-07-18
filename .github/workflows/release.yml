@@ -34,6 +34,9 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             executable: visual-evidence
+          - os: macos-15-intel
+            rid: osx-x64
+            executable: visual-evidence
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -94,6 +97,10 @@ jobs:
   package:
     name: tool package
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -101,6 +108,7 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet pack src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj --configuration Release --output artifacts/package
       - name: Add checksum
+        id: package
         shell: pwsh
         run: |
           $packages = @(Get-ChildItem artifacts/package/*.nupkg -File | Where-Object Name -NotLike '*.snupkg')
@@ -108,6 +116,11 @@ jobs:
           $package = $packages[0]
           $hash = (Get-FileHash $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           Set-Content "$($package.FullName).sha256" "$hash  $($package.Name)" -NoNewline
+          "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
+      - name: Attest tool package
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ steps.package.outputs.path }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tool-package

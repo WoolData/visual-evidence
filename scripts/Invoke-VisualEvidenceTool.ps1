@@ -2,6 +2,8 @@
 
 [CmdletBinding()]
 param(
+    [string] $DistributionRoot,
+
     [Parameter(ValueFromRemainingArguments)]
     [string[]] $ToolArguments
 )
@@ -23,6 +25,8 @@ $rid = if ($IsWindows -and [System.Runtime.InteropServices.RuntimeInformation]::
     'linux-x64'
 } elseif ($IsMacOS -and [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') {
     'osx-arm64'
+} elseif ($IsMacOS -and [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64') {
+    'osx-x64'
 } else {
     throw "No packaged Visual Evidence tool supports this runner: $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription) $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)."
 }
@@ -44,27 +48,17 @@ $cacheRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
 } else {
     Join-Path $env:RUNNER_TEMP 'wooldata-visual-evidence'
 }
-$versionRoot = Join-Path $cacheRoot "$($manifest.version)-$rid"
+$versionRoot = Join-Path $cacheRoot "$($manifest.version)-$rid-$PID"
 $toolRoot = Join-Path $versionRoot 'tool'
 $executable = Join-Path $toolRoot $artifact.executable
-$verifiedMarker = Join-Path $versionRoot 'attestation-verified'
 
-if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or
-    -not (Test-Path -LiteralPath $verifiedMarker -PathType Leaf)) {
-    New-Item -ItemType Directory -Path $versionRoot -Force | Out-Null
-    $archivePath = Join-Path $versionRoot $artifact.archive
-    $checksumPath = "$archivePath.sha256"
+New-Item -ItemType Directory -Path $versionRoot -Force | Out-Null
+$archivePath = Join-Path $versionRoot $artifact.archive
+$checksumPath = "$archivePath.sha256"
+if ([string]::IsNullOrWhiteSpace($DistributionRoot)) {
     $releaseRoot = "https://github.com/$($manifest.repository)/releases/download/v$($manifest.version)"
     Invoke-WebRequest -Uri "$releaseRoot/$($artifact.archive)" -OutFile $archivePath
     Invoke-WebRequest -Uri "$releaseRoot/$($artifact.archive).sha256" -OutFile $checksumPath
-
-    $expectedHash = (Get-Content -LiteralPath $checksumPath -Raw).Trim().Split(' ')[0]
-    $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
-    if ($expectedHash -notmatch '^[0-9a-fA-F]{64}$' -or
-        -not [string]::Equals($actualHash, $expectedHash, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Packaged tool SHA-256 mismatch. Expected $expectedHash; received $actualHash."
-    }
-
     if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
         throw 'GitHub CLI is required to verify the packaged tool attestation.'
     }
@@ -72,19 +66,26 @@ if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
+} else {
+    $localRoot = Resolve-Path -LiteralPath $DistributionRoot
+    Copy-Item -LiteralPath (Join-Path $localRoot $artifact.archive) -Destination $archivePath
+    Copy-Item -LiteralPath (Join-Path $localRoot "$($artifact.archive).sha256") -Destination $checksumPath
+}
 
-    if (Test-Path -LiteralPath $toolRoot) {
-        Remove-Item -LiteralPath $toolRoot -Recurse -Force
-    }
-    Expand-Archive -LiteralPath $archivePath -DestinationPath $toolRoot
-    if (-not $IsWindows) {
-        & chmod +x $executable
-        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    }
-    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-        throw "Verified archive omitted the expected executable: $($artifact.executable)"
-    }
-    Set-Content -LiteralPath $verifiedMarker -Value $actualHash -NoNewline
+$expectedHash = (Get-Content -LiteralPath $checksumPath -Raw).Trim().Split(' ')[0]
+$actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
+if ($expectedHash -notmatch '^[0-9a-fA-F]{64}$' -or
+    -not [string]::Equals($actualHash, $expectedHash, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Packaged tool SHA-256 mismatch. Expected $expectedHash; received $actualHash."
+}
+
+Expand-Archive -LiteralPath $archivePath -DestinationPath $toolRoot
+if (-not $IsWindows) {
+    & chmod +x $executable
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+    throw "Verified archive omitted the expected executable: $($artifact.executable)"
 }
 
 & $executable @ToolArguments
