@@ -9,6 +9,14 @@ namespace WoolData.VisualEvidence.Tests;
 public sealed class AiImageReviewProviderTests
 {
     [Fact]
+    public void DefaultPrompt_MatchesStrictDocumentTextContract()
+    {
+        Assert.Contains("non-empty, single-line text", AiReviewPrompts.Compare, StringComparison.Ordinal);
+        Assert.Contains("without control or format characters", AiReviewPrompts.Compare, StringComparison.Ordinal);
+        Assert.Contains("exactly high, medium, or low", AiReviewPrompts.Compare, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task AnthropicProvider_UsesImageBlocksAndInjectsAuthoritativeProvenance()
     {
         HttpRequestMessage? observed = null;
