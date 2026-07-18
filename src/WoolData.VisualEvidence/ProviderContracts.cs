@@ -46,3 +46,10 @@ public interface IStatusPublisher
         string context,
         CancellationToken cancellationToken = default);
 }
+
+public interface IImageReviewProvider
+{
+    Task<AiReviewDocument> ReviewAsync(
+        AiReviewRequest request,
+        CancellationToken cancellationToken = default);
+}

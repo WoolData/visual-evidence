@@ -10,13 +10,34 @@ public sealed class SchemaContractTests
     [Fact]
     public void PublishedSchemaContainsOnlyValidRegularExpressions()
     {
-        string schemaPath = Path.Combine(FindRepositoryRoot(), "schema", "evidence-manifest-v1.schema.json");
+        string schemaRoot = Path.Combine(FindRepositoryRoot(), "schema");
+        foreach (string schemaPath in Directory.GetFiles(schemaRoot, "*.schema.json"))
+        {
+            using JsonDocument schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
+            foreach (string pattern in FindPatterns(schema.RootElement))
+            {
+                _ = new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+            }
+        }
+    }
+
+    [Fact]
+    public void AiReviewSchemaPinsStrictVersionedDocumentShape()
+    {
+        string schemaPath = Path.Combine(FindRepositoryRoot(), "schema", "ai-review-v1.schema.json");
         using JsonDocument schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
 
-        foreach (string pattern in FindPatterns(schema.RootElement))
-        {
-            _ = new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
-        }
+        Assert.False(schema.RootElement.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(1, schema.RootElement
+            .GetProperty("properties")
+            .GetProperty("schemaVersion")
+            .GetProperty("const")
+            .GetInt32());
+        Assert.Equal(50, schema.RootElement
+            .GetProperty("properties")
+            .GetProperty("reviews")
+            .GetProperty("maxItems")
+            .GetInt32());
     }
 
     [Fact]

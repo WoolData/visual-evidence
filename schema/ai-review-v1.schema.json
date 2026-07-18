@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WoolData/visual-evidence/blob/main/schema/ai-review-v1.schema.json",
+  "title": "Visual Evidence AI Review v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "task", "provider", "model", "promptSha256", "transportMaxEdge", "reviews"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "task": { "enum": ["compare", "describe", "issues"] },
+    "provider": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "promptSha256": { "$ref": "#/$defs/sha256" },
+    "transportMaxEdge": { "type": "integer", "minimum": 1, "maximum": 8192 },
+    "reviews": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": { "$ref": "#/$defs/review" }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[A-Fa-f0-9]{64}$"
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["beforeSha256", "afterSha256"],
+          "properties": {
+            "beforeSha256": { "$ref": "#/$defs/sha256" },
+            "afterSha256": { "$ref": "#/$defs/sha256" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["imageSha256"],
+          "properties": {
+            "imageSha256": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "description"],
+      "properties": {
+        "severity": { "enum": ["high", "medium", "low"] },
+        "area": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "source"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "source": { "$ref": "#/$defs/source" },
+        "altText": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "differences": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        },
+        "issues": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/issue" }
+        }
+      }
+    }
+  }
+}
