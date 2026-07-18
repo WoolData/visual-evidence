@@ -193,15 +193,15 @@ pull-request comment -> pinned repository URL -> asset commit -> normalized PNG
 
 | Property | GitHub web attachment | Evidence commit |
 |---|---|---|
-| Uploadable through this automation | No | Yes |
-| Ordinary Git data | No | Yes |
-| Cloneable, mirrorable, and backupable with repository refs | No | Yes |
-| Explicitly bound to head and merge-base revisions | No | Yes |
-| Portable with a repository mirror | Attachment URL still points to GitHub | Yes |
-| Survives assets-branch deletion or force-push | Not dependent on the branch | Only while the evidence commit remains reachable |
-| Retention policy | GitHub-managed | Repository owner defines it |
+| Uploadable by automation | No (the upload flow is browser-only) | Yes |
+| Enumerable through an API | No | Yes (ordinary Git refs and trees) |
+| Exportable and backupable | No | Yes (clones and mirrors with repository refs) |
+| Provenance bound to head and merge-base revisions | None | Exact |
+| Survives repository migration off GitHub | No (attachment URLs still point to GitHub) | Yes |
+| Survives assets-branch deletion or force-push | Yes (not stored in Git) | Only while the evidence commit remains reachable |
+| Retention guarantee | Undocumented (observed persistence, no contract) | Repository owner defines it |
 
-The models fail in opposite directions: web attachments are convenient but externally managed; evidence commits are owned and portable but require reachability discipline.
+The models fail in opposite directions: web attachments are convenient but externally managed and cannot leave GitHub; evidence commits are owned, auditable, and portable, but demand one discipline in exchange — the assets branch must stay append-only and protected so every evidence commit remains reachable.
 
 ## Platform Support
 
