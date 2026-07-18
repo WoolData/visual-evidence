@@ -92,12 +92,12 @@ public sealed partial class EvidencePairValidator
         ValidateEnvironmentFields(after);
         string calculatedBefore = before.CalculateCompatibilityKey();
         string calculatedAfter = after.CalculateCompatibilityKey();
-        if (!FixedTimeEquals(before.CompatibilityKey, calculatedBefore) ||
-            !FixedTimeEquals(after.CompatibilityKey, calculatedAfter))
+        if (!NormalizedHashEquals(before.CompatibilityKey, calculatedBefore) ||
+            !NormalizedHashEquals(after.CompatibilityKey, calculatedAfter))
         {
             throw new EvidenceValidationException("A capture environment compatibility key does not match its fields.");
         }
-        if (!FixedTimeEquals(calculatedBefore, calculatedAfter))
+        if (!NormalizedHashEquals(calculatedBefore, calculatedAfter))
         {
             throw new EvidenceValidationException(
                 "Before and after captures were produced by incompatible operating systems, runners, renderers, scales, adapters, or font sets.");
@@ -200,7 +200,7 @@ public sealed partial class EvidencePairValidator
 
         byte[] sourceBytes = File.ReadAllBytes(path);
         string hash = Convert.ToHexString(SHA256.HashData(sourceBytes)).ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(capture.Sha256) || !FixedTimeEquals(hash, capture.Sha256))
+        if (string.IsNullOrWhiteSpace(capture.Sha256) || !NormalizedHashEquals(hash, capture.Sha256))
         {
             throw new EvidenceValidationException($"Capture '{capture.Key}' SHA-256 does not match its manifest.");
         }
@@ -229,7 +229,13 @@ public sealed partial class EvidencePairValidator
                     $"Capture '{capture.Key}' dimensions are {info.Width}x{info.Height}; manifest declares {capture.Width}x{capture.Height}.");
             }
 
-            using SKBitmap? bitmap = SKBitmap.Decode(data);
+            var decodeInfo = new SKImageInfo(
+                info.Width,
+                info.Height,
+                SKColorType.Rgba8888,
+                SKAlphaType.Unpremul,
+                info.ColorSpace);
+            using SKBitmap? bitmap = SKBitmap.Decode(data, decodeInfo);
             if (bitmap is null)
             {
                 throw new EvidenceValidationException($"Capture '{capture.Key}' could not be decoded.");
@@ -268,30 +274,31 @@ public sealed partial class EvidencePairValidator
 
     private static (bool IsSingleColor, bool HasVisiblePixel) InspectPixels(SKBitmap bitmap)
     {
-        SKColor first = bitmap.GetPixel(0, 0);
+        const int bytesPerPixel = 4;
+        if (bitmap.ColorType != SKColorType.Rgba8888 || bitmap.BytesPerPixel != bytesPerPixel)
+        {
+            throw new InvalidOperationException("Pixel inspection requires RGBA8888 input.");
+        }
+
+        ReadOnlySpan<byte> pixels = bitmap.GetPixelSpan();
+        ReadOnlySpan<byte> first = pixels[..bytesPerPixel];
         bool isSingleColor = true;
         bool hasVisiblePixel = false;
         for (int y = 0; y < bitmap.Height; y++)
         {
-            for (int x = 0; x < bitmap.Width; x++)
+            ReadOnlySpan<byte> row = pixels.Slice(y * bitmap.RowBytes, bitmap.Width * bytesPerPixel);
+            for (int offset = 0; offset < row.Length; offset += bytesPerPixel)
             {
-                SKColor pixel = bitmap.GetPixel(x, y);
-                hasVisiblePixel |= pixel.Alpha != 0;
-                if (pixel != first)
-                {
-                    isSingleColor = false;
-                }
+                ReadOnlySpan<byte> pixel = row.Slice(offset, bytesPerPixel);
+                hasVisiblePixel |= pixel[3] != 0;
+                isSingleColor &= pixel.SequenceEqual(first);
             }
         }
         return (isSingleColor, hasVisiblePixel);
     }
 
-    private static bool FixedTimeEquals(string left, string right)
-    {
-        byte[] leftBytes = System.Text.Encoding.UTF8.GetBytes(left.Trim().ToLowerInvariant());
-        byte[] rightBytes = System.Text.Encoding.UTF8.GetBytes(right.Trim().ToLowerInvariant());
-        return leftBytes.Length == rightBytes.Length && CryptographicOperations.FixedTimeEquals(leftBytes, rightBytes);
-    }
+    private static bool NormalizedHashEquals(string left, string right) =>
+        string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9_.-]{0,159}$", RegexOptions.CultureInvariant)]
     private static partial Regex CaptureKeyRegex();
