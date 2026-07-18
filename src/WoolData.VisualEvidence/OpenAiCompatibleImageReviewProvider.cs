@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Wool Data Inc. Licensed under the MIT License.
 
 using System.Net.Http.Headers;
+using System.Globalization;
+using System.Text;
 
 namespace WoolData.VisualEvidence;
 
@@ -19,7 +21,8 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
         }
         if (string.IsNullOrWhiteSpace(options.ProviderName) ||
             options.ProviderName.Length > 100 ||
-            options.ProviderName.Any(char.IsControl))
+            options.ProviderName.EnumerateRunes().Any(static rune =>
+                Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format))
         {
             throw new ArgumentException("OpenAI-compatible provider name must contain 1 to 100 printable characters.", nameof(options));
         }

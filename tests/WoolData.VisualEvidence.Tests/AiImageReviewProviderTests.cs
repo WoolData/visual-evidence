@@ -230,6 +230,19 @@ public sealed class AiImageReviewProviderTests
             }));
     }
 
+    [Theory]
+    [InlineData("provider\u200Bname")]
+    [InlineData("provider\U000E0001name")]
+    public void Provider_RejectsFormatCharactersInProviderName(string providerName)
+    {
+        Assert.Throws<ArgumentException>(() => new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions
+            {
+                Model = "vision-test",
+                ProviderName = providerName,
+            }));
+    }
+
     [Fact]
     public async Task Provider_RejectsOversizedResponseBeforeParsing()
     {
