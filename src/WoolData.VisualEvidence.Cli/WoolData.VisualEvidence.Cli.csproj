@@ -6,7 +6,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>visual-evidence</ToolCommandName>
     <PackageId>WoolData.VisualEvidence.Tool</PackageId>
-    <Version>0.2.4</Version>
+    <Version>0.3.0</Version>
     <Description>Publish durable, exact-revision before/after visual evidence to code review systems.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/WoolData/visual-evidence</PackageProjectUrl>

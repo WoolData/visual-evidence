@@ -131,7 +131,7 @@ jobs:
           VISUAL_EVIDENCE_USE_SOURCE: "false"
           VISUAL_EVIDENCE_DISTRIBUTION_ROOT: artifacts/distribution
         run: |
-          $archive = "visual-evidence-v0.2.4-${{ matrix.rid }}.zip"
+          $archive = "visual-evidence-v0.3.0-${{ matrix.rid }}.zip"
           New-Item -ItemType Directory -Path artifacts/distribution -Force | Out-Null
           Compress-Archive -Path artifacts/native/* -DestinationPath "artifacts/distribution/$archive"
           $hash = (Get-FileHash "artifacts/distribution/$archive" -Algorithm SHA256).Hash.ToLowerInvariant()
