@@ -1,0 +1,61 @@
+name: Publish NuGet Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing verified GitHub release version, without the v prefix.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish verified package
+    runs-on: ubuntu-latest
+    environment: nuget-org
+    steps:
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Download verified release package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Version must use MAJOR.MINOR.PATCH format: $env:VERSION"
+          }
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          gh release download "v$env:VERSION" --repo "${{ github.repository }}" --dir artifacts `
+            --pattern "WoolData.VisualEvidence.Tool.$env:VERSION.nupkg" `
+            --pattern "WoolData.VisualEvidence.Tool.$env:VERSION.nupkg.sha256"
+          if ($LASTEXITCODE -ne 0) { throw 'Release package download failed.' }
+      - name: Verify checksum and provenance
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          $package = Get-Item -LiteralPath "artifacts/WoolData.VisualEvidence.Tool.$env:VERSION.nupkg"
+          $checksum = Get-Content -LiteralPath "$($package.FullName).sha256" -Raw
+          $expected = $checksum.Split(' ')[0]
+          $actual = (Get-FileHash -LiteralPath $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'Release package checksum does not match.' }
+          gh attestation verify $package.FullName --repo "${{ github.repository }}"
+          if ($LASTEXITCODE -ne 0) { throw 'Release package attestation verification failed.' }
+      - name: Publish to NuGet.org
+        shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
+            throw 'The nuget-org environment must provide NUGET_API_KEY.'
+          }
+          dotnet nuget push "artifacts/WoolData.VisualEvidence.Tool.$env:VERSION.nupkg" `
+            --source https://api.nuget.org/v3/index.json --skip-duplicate
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet.org publication failed.' }
