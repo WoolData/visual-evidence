@@ -80,7 +80,13 @@ jobs:
       - name: Run NativeAOT protocol smoke test
         shell: pwsh
         run: |
-          $description = & (Join-Path "artifacts/native" "${{ matrix.executable }}") describe --json | ConvertFrom-Json
+          $tool = Join-Path "artifacts/native" "${{ matrix.executable }}"
+          $description = & $tool describe --json | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or $description.protocolVersion -ne 1 -or -not $description.captureIsExternal) {
             throw "NativeAOT protocol smoke test failed."
+          }
+          [IO.File]::WriteAllBytes("artifacts/native-smoke.png", [Convert]::FromBase64String((Get-Content examples/native-smoke.png.base64 -Raw).Trim()))
+          $validation = & $tool validate --image artifacts/native-smoke.png --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $validation.ok -or $validation.captures -ne 1) {
+            throw "NativeAOT PNG validation smoke test failed."
           }
