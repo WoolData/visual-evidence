@@ -131,10 +131,39 @@ jobs:
           path: artifacts/package/*
           if-no-files-found: error
 
+  assemble:
+    name: assemble release bundle
+    needs: [native, package]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts/release
+          merge-multiple: true
+      - name: Verify release bundle
+        shell: pwsh
+        run: |
+          $archives = @(Get-ChildItem artifacts/release/*.zip -File)
+          $packages = @(Get-ChildItem artifacts/release/*.nupkg -File | Where-Object Name -NotLike '*.snupkg')
+          if ($archives.Count -ne 4 -or $packages.Count -ne 1) {
+            throw "Expected four native archives and one tool package; found $($archives.Count) and $($packages.Count)."
+          }
+          foreach ($artifact in @($archives) + @($packages)) {
+            $checksumPath = "$($artifact.FullName).sha256"
+            if (-not (Test-Path -LiteralPath $checksumPath -PathType Leaf)) {
+              throw "Missing checksum: $($artifact.Name)"
+            }
+            $expected = (Get-Content -LiteralPath $checksumPath -Raw).Split(' ')[0]
+            $actual = (Get-FileHash -LiteralPath $artifact.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) {
+              throw "Checksum mismatch: $($artifact.Name)"
+            }
+          }
+
   publish:
     name: publish GitHub release
     if: github.ref_type == 'tag'
-    needs: [native, package]
+    needs: [native, package, assemble]
     runs-on: ubuntu-latest
     permissions:
       contents: write
