@@ -92,6 +92,7 @@ public sealed class AiReviewDocumentCodecTests
     [InlineData("   ")]
     [InlineData("summary\nwith newline")]
     [InlineData("summary\u202Etxt")]
+    [InlineData("summary\U000E0001txt")]
     public void Validate_RejectsUnsafeSummaryText(string summary)
     {
         AiReviewDocument document = CreateDocument();

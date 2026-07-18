@@ -1,8 +1,9 @@
 // Copyright (c) 2026 Wool Data Inc. Licensed under the MIT License.
 
+using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Globalization;
 
 namespace WoolData.VisualEvidence;
 
@@ -232,9 +233,8 @@ public static class AiReviewDocumentCodec
     {
         if (string.IsNullOrWhiteSpace(value) ||
             value.Length > maximumLength ||
-            value.Any(static character =>
-                char.IsControl(character) ||
-                CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.Format))
+            value.EnumerateRunes().Any(static rune =>
+                Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format))
         {
             throw new EvidenceValidationException(
                 $"AI review {name} must contain between 1 and {maximumLength} characters and no control or formatting characters.");
