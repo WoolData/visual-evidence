@@ -85,7 +85,7 @@ public sealed class EvidencePublicationService
             changeNumber,
             evidenceRoot,
             summary,
-            aiReviewPath: null,
+            aiReview: null,
             cancellationToken).ConfigureAwait(false);
 
     public async Task<AssetPublication> PublishWithAiReviewAsync(
@@ -101,11 +101,14 @@ public sealed class EvidencePublicationService
             throw new InvalidOperationException("The configured asset store does not support AI review publication.");
         }
 
+        AiReviewDocument aiReview = await AiReviewDocumentCodec.ReadAsync(
+            aiReviewPath,
+            cancellationToken).ConfigureAwait(false);
         return await PublishComparisonAsync(
             changeNumber,
             evidenceRoot,
             summary,
-            aiReviewPath,
+            aiReview,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -113,7 +116,7 @@ public sealed class EvidencePublicationService
         int changeNumber,
         string evidenceRoot,
         string summary,
-        string? aiReviewPath,
+        AiReviewDocument? aiReview,
         CancellationToken cancellationToken)
     {
         ChangeRequestRevision revision = await _changeRequests.ResolveRevisionAsync(
@@ -127,9 +130,6 @@ public sealed class EvidencePublicationService
                 revision.MergeBaseRevision,
                 revision.HeadRevision,
                 cancellationToken).ConfigureAwait(false);
-            AiReviewDocument? aiReview = aiReviewPath is null
-                ? null
-                : await AiReviewDocumentCodec.ReadAsync(aiReviewPath, cancellationToken).ConfigureAwait(false);
             if (aiReview is not null)
             {
                 AiReviewProvenanceValidator.ValidateComparison(aiReview, evidence);

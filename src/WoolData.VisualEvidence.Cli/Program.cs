@@ -211,6 +211,16 @@ internal static class ProgramMain
         string summary = options.RequiredLimited("summary", 2000);
         string repository = ResolveRepository(options);
         int changeNumber = options.RequiredInt("change-number");
+        string? evidenceRoot = options.Optional("evidence-root");
+        string? aiReview = options.Optional("ai-review");
+        if (evidenceRoot is null && aiReview is not null)
+        {
+            throw new ArgumentException("--ai-review currently requires manifest-backed --evidence-root comparison mode.");
+        }
+        if (evidenceRoot is not null)
+        {
+            EnsureNoSimpleImages(options);
+        }
         string token = ResolveToken(options);
         var githubOptions = new GitHubOptions
         {
@@ -230,11 +240,8 @@ internal static class ProgramMain
             publishStatus ? github : null,
             new EvidencePairValidator(BuildValidationOptions(options)),
             github);
-        string? evidenceRoot = options.Optional("evidence-root");
         if (evidenceRoot is not null)
         {
-            EnsureNoSimpleImages(options);
-            string? aiReview = options.Optional("ai-review");
             AssetPublication publication = aiReview is null
                 ? await service.PublishAsync(
                     changeNumber,
@@ -257,11 +264,6 @@ internal static class ProgramMain
                     publication.Assets.Count),
                 AgentProtocolJsonContext.Default.AgentPublishResult);
             return 0;
-        }
-
-        if (options.Optional("ai-review") is not null)
-        {
-            throw new ArgumentException("--ai-review currently requires manifest-backed --evidence-root comparison mode.");
         }
 
         string[] images = ResolveImages(options);

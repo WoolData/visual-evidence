@@ -183,6 +183,7 @@ public static class ReviewMarkdown
         .Replace("]", string.Empty, StringComparison.Ordinal)
         .Replace("(", string.Empty, StringComparison.Ordinal)
         .Replace(")", string.Empty, StringComparison.Ordinal)
+        .Replace("|", "\\|", StringComparison.Ordinal)
         .Replace("@", "&#64;", StringComparison.Ordinal);
 
     private static string EscapeAi(string value) => Escape(value)

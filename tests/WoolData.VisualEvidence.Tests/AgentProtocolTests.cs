@@ -200,6 +200,38 @@ public sealed class AgentProtocolTests
     }
 
     [Fact]
+    public async Task Publish_RejectsAiReviewOutsideComparisonModeBeforeTokenResolution()
+    {
+        string? originalToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        TextWriter originalError = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
+            Console.SetError(output);
+
+            int exitCode = await ProgramMain.RunAsync([
+                "publish",
+                "--summary", "Summary",
+                "--repository", "WoolData/example",
+                "--change-number", "1",
+                "--image", "missing.png",
+                "--ai-review", "review.json",
+                "--json",
+            ]);
+
+            Assert.Equal(2, exitCode);
+            Assert.Contains("--evidence-root comparison mode", output.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("GITHUB_TOKEN", output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(originalError);
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", originalToken);
+        }
+    }
+
+    [Fact]
     public async Task Review_RequiresExplicitProviderWhenBothDefaultKeysExist()
     {
         using var fixture = new EvidenceFixture();

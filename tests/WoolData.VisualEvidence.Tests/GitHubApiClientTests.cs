@@ -132,6 +132,63 @@ public sealed class GitHubApiClientTests
     }
 
     [Fact]
+    public async Task PublishWithAiReviewAsync_ReusesExistingCommitForIdenticalEvidence()
+    {
+        int blob = 0;
+        int commits = 0;
+        bool branchExists = false;
+        string commitSha = new('d', 40);
+        string treeSha = new('f', 40);
+        var handler = new RecordingHandler(request =>
+        {
+            string path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/blobs", StringComparison.Ordinal))
+            {
+                char contentSha = (char)('a' + (blob++ % 3));
+                return Json(HttpStatusCode.Created, $"{{\"sha\":\"{new string(contentSha, 40)}\"}}");
+            }
+            if (request.Method == HttpMethod.Get && path.Contains("/git/ref/heads/", StringComparison.Ordinal))
+            {
+                return branchExists
+                    ? Json(HttpStatusCode.OK, $"{{\"object\":{{\"sha\":\"{commitSha}\"}}}}")
+                    : Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}");
+            }
+            if (request.Method == HttpMethod.Get && path.EndsWith($"/git/commits/{commitSha}", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.OK, $"{{\"tree\":{{\"sha\":\"{treeSha}\"}}}}");
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/trees", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.Created, $"{{\"sha\":\"{treeSha}\"}}");
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/commits", StringComparison.Ordinal))
+            {
+                commits++;
+                return Json(HttpStatusCode.Created, $"{{\"sha\":\"{commitSha}\"}}");
+            }
+            if (request.Method == HttpMethod.Post && path.EndsWith("/git/refs", StringComparison.Ordinal))
+            {
+                branchExists = true;
+                return Json(HttpStatusCode.Created, "{}");
+            }
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        });
+        using var client = CreateClient(handler);
+        string head = new('2', 40);
+        ValidatedEvidencePair evidence = CreateValidatedEvidence();
+        AiReviewDocument review = CreateAiReview(evidence);
+
+        AssetPublication first = await client.PublishWithAiReviewAsync(
+            17, head, evidence, review, TestContext.Current.CancellationToken);
+        AssetPublication second = await client.PublishWithAiReviewAsync(
+            17, head, evidence, review, TestContext.Current.CancellationToken);
+
+        Assert.Equal(commitSha, first.CommitSha);
+        Assert.Equal(first.CommitSha, second.CommitSha);
+        Assert.Equal(1, commits);
+    }
+
+    [Fact]
     public async Task PublishOrUpdateAsync_UpdatesOwnMarkerComment()
     {
         HttpMethod? finalMethod = null;

@@ -109,6 +109,72 @@ public sealed class EvidencePublicationServiceTests
         Assert.Contains("## Advisory AI visual review", provider.LastMarkdown, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task PublishWithAiReviewAsync_RejectsMismatchedProvenanceBeforePublishingAssetsOrComment()
+    {
+        using var fixture = new EvidenceFixture();
+        ValidatedEvidencePair evidence = await new EvidencePairValidator().ValidateAsync(
+            fixture.Root,
+            cancellationToken: TestContext.Current.CancellationToken);
+        ValidatedImagePair pair = evidence.Captures.Single();
+        AiReviewDocument review = AiReviewDocumentCodecTests.CreateDocument() with
+        {
+            Reviews =
+            [
+                AiReviewDocumentCodecTests.CreateDocument().Reviews.Single() with
+                {
+                    Key = pair.Key,
+                    Source = new AiReviewSource
+                    {
+                        BeforeSha256 = pair.Before.SourceSha256,
+                        AfterSha256 = new string('f', 64),
+                    },
+                },
+            ],
+        };
+        string reviewPath = Path.Combine(fixture.Root, "ai-review-v1.json");
+        await File.WriteAllBytesAsync(
+            reviewPath,
+            AiReviewDocumentCodec.Serialize(review),
+            TestContext.Current.CancellationToken);
+        var provider = new FakeProvider(
+            new ChangeRequestRevision(9, fixture.AfterRevision, new string('3', 40), fixture.BeforeRevision),
+            Array.Empty<string>());
+        var service = new EvidencePublicationService("WoolData/example", provider, provider, provider);
+
+        await Assert.ThrowsAsync<EvidenceValidationException>(() => service.PublishWithAiReviewAsync(
+            9,
+            fixture.Root,
+            reviewPath,
+            "summary",
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(0, provider.AiReviewPublicationCount);
+        Assert.Null(provider.LastMarkdown);
+    }
+
+    [Fact]
+    public async Task PublishWithAiReviewAsync_RejectsMalformedReviewBeforeResolvingChangeRequest()
+    {
+        using var fixture = new EvidenceFixture();
+        string reviewPath = Path.Combine(fixture.Root, "ai-review-v1.json");
+        await File.WriteAllTextAsync(reviewPath, "not-json", TestContext.Current.CancellationToken);
+        var provider = new FakeProvider(
+            new ChangeRequestRevision(9, fixture.AfterRevision, new string('3', 40), fixture.BeforeRevision),
+            Array.Empty<string>());
+        var service = new EvidencePublicationService("WoolData/example", provider, provider, provider);
+
+        await Assert.ThrowsAsync<EvidenceValidationException>(() => service.PublishWithAiReviewAsync(
+            9,
+            fixture.Root,
+            reviewPath,
+            "summary",
+            TestContext.Current.CancellationToken));
+
+        Assert.Equal(0, provider.RevisionResolutionCount);
+        Assert.Equal(0, provider.AiReviewPublicationCount);
+    }
+
     private static string BuildComment(string head, string mergeBase, string assetCommit) => $$"""
         {{ReviewMarkdown.Marker}}
         Visual-Evidence-Head: {{head}}
@@ -126,6 +192,8 @@ public sealed class EvidencePublicationServiceTests
         private readonly Exception? _statusException;
 
         public string? LastMarkdown { get; private set; }
+        public int AiReviewPublicationCount { get; private set; }
+        public int RevisionResolutionCount { get; private set; }
 
         public FakeProvider(
             ChangeRequestRevision revision,
@@ -139,8 +207,11 @@ public sealed class EvidencePublicationServiceTests
             _statusException = statusException;
         }
 
-        public Task<ChangeRequestRevision> ResolveRevisionAsync(int number, CancellationToken cancellationToken = default) =>
-            Task.FromResult(_revision);
+        public Task<ChangeRequestRevision> ResolveRevisionAsync(int number, CancellationToken cancellationToken = default)
+        {
+            RevisionResolutionCount++;
+            return Task.FromResult(_revision);
+        }
 
         public Task<AssetPublication> PublishAsync(int changeNumber, string headRevision, ValidatedEvidencePair evidence, CancellationToken cancellationToken = default) =>
             Task.FromException<AssetPublication>(_publicationException ?? new NotSupportedException());
@@ -150,8 +221,10 @@ public sealed class EvidencePublicationServiceTests
             string headRevision,
             ValidatedEvidencePair evidence,
             AiReviewDocument review,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AssetPublication(
+            CancellationToken cancellationToken = default)
+        {
+            AiReviewPublicationCount++;
+            return Task.FromResult(new AssetPublication(
                 new string('5', 40),
                 evidence.Captures.Select(pair => new PublishedAsset(
                     pair.Key,
@@ -159,6 +232,7 @@ public sealed class EvidencePublicationServiceTests
                     $"pr-{changeNumber}/{headRevision}/before/{pair.Key}.png",
                     $"pr-{changeNumber}/{headRevision}/after/{pair.Key}.png")).ToArray(),
                 $"pr-{changeNumber}/{headRevision}/ai-review-v1.json"));
+        }
 
         public Task PublishOrUpdateAsync(int changeNumber, string markdown, CancellationToken cancellationToken = default)
         {
