@@ -119,6 +119,16 @@ public sealed class AiReviewDocumentCodecTests
         Assert.Contains("cannot be null", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Read_RejectsNullDocumentWithNeutralError()
+    {
+        EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
+            () => AiReviewDocumentCodec.Read("null"u8));
+
+        Assert.Contains("value cannot be null", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("array", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Theory]
     [InlineData("altText", "Settings page with navigation and a save button.")]
     [InlineData("beforeSha256", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")]

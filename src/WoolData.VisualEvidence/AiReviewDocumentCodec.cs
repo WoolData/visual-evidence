@@ -287,7 +287,7 @@ public static class AiReviewDocumentCodec
                 if (reader.TokenType == JsonTokenType.Null)
                 {
                     string target = currentPropertyName is null
-                        ? "array item"
+                        ? "value"
                         : $"property '{currentPropertyName}'";
                     throw new EvidenceValidationException($"AI review {target} cannot be null.");
                 }
