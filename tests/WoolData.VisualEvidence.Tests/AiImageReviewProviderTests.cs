@@ -67,10 +67,8 @@ public sealed class AiImageReviewProviderTests
         Assert.Equal("openai-compatible", result.Provider);
     }
 
-    [Theory]
-    [InlineData("grok")]
-    [InlineData("gemini")]
-    public async Task OpenAiCompatibleProvider_RecordsFirstClassProviderProfile(string providerName)
+    [Fact]
+    public async Task OpenAiCompatibleProvider_RecordsGeminiProviderProfile()
     {
         HttpRequestMessage? observed = null;
         var handler = new StubHandler(async request =>
@@ -84,7 +82,7 @@ public sealed class AiImageReviewProviderTests
             {
                 ApiKey = "provider-secret",
                 Model = "vision-test",
-                ProviderName = providerName,
+                ProviderName = "gemini",
             },
             client);
 
@@ -94,10 +92,38 @@ public sealed class AiImageReviewProviderTests
 
         Assert.NotNull(observed);
         Assert.Equal("provider-secret", observed.Headers.Authorization!.Parameter);
-        Assert.Equal(providerName, result.Provider);
+        Assert.Equal("gemini", result.Provider);
         string body = await observed.Content!.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"response_format\"", body, StringComparison.Ordinal);
         Assert.Contains("data:image/png;base64,", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GrokProvider_UsesResponsesApiImageBlocksAndStrictOutput()
+    {
+        HttpRequestMessage? observed = null;
+        var handler = new StubHandler(async request =>
+        {
+            observed = await CloneAsync(request);
+            return JsonResponse(XaiResponsesEnvelope(Content()));
+        });
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://api.x.ai/v1/") };
+        using var provider = new GrokImageReviewProvider(
+            new GrokImageReviewOptions { ApiKey = "xai-secret", Model = "grok-test" },
+            client);
+
+        AiReviewDocument result = await provider.ReviewAsync(
+            Request("screen"),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(observed);
+        Assert.Equal("responses", observed.RequestUri!.Segments[^1]);
+        Assert.Equal("xai-secret", observed.Headers.Authorization!.Parameter);
+        string body = await observed.Content!.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("\"instructions\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"type\":\"input_image\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"format\":{\"type\":\"json_schema\"", body, StringComparison.Ordinal);
+        Assert.Equal("grok", result.Provider);
     }
 
     [Fact]
@@ -212,6 +238,18 @@ public sealed class AiImageReviewProviderTests
     private static string OpenAiEnvelope(string content) => JsonSerializer.Serialize(new
     {
         choices = new[] { new { message = new { content } } },
+    });
+
+    private static string XaiResponsesEnvelope(string content) => JsonSerializer.Serialize(new
+    {
+        output = new[]
+        {
+            new
+            {
+                type = "message",
+                content = new[] { new { type = "output_text", text = content } },
+            },
+        },
     });
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)

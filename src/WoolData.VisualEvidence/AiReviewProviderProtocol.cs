@@ -105,6 +105,42 @@ internal static class AiReviewProviderProtocol
         return stream.ToArray();
     }
 
+    public static byte[] BuildXaiResponsesRequest(
+        string model,
+        string prompt,
+        AiReviewTransportPair pair,
+        bool correction)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("model", model);
+            writer.WriteString("instructions", EffectivePrompt(prompt, correction));
+            writer.WritePropertyName("input");
+            writer.WriteStartArray();
+            writer.WriteStartObject();
+            writer.WriteString("role", "user");
+            writer.WritePropertyName("content");
+            WriteXaiResponsesContent(writer, pair);
+            writer.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WritePropertyName("text");
+            writer.WriteStartObject();
+            writer.WritePropertyName("format");
+            writer.WriteStartObject();
+            writer.WriteString("type", "json_schema");
+            writer.WriteString("name", "visual_evidence_review");
+            writer.WriteBoolean("strict", true);
+            writer.WritePropertyName("schema");
+            WriteSchema(writer);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        return stream.ToArray();
+    }
+
     public static string ExtractAnthropicContent(byte[] response)
     {
         try
@@ -151,6 +187,37 @@ internal static class AiReviewProviderProtocol
         {
             throw new EvidenceValidationException("OpenAI-compatible provider returned an invalid review response envelope.", ex);
         }
+    }
+
+    public static string ExtractXaiResponsesContent(byte[] response)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(response);
+            foreach (JsonElement output in document.RootElement.GetProperty("output").EnumerateArray())
+            {
+                if (!output.TryGetProperty("type", out JsonElement outputType) || outputType.GetString() != "message")
+                {
+                    continue;
+                }
+                foreach (JsonElement content in output.GetProperty("content").EnumerateArray())
+                {
+                    if (content.TryGetProperty("type", out JsonElement contentType) && contentType.GetString() == "output_text")
+                    {
+                        string? text = content.GetProperty("text").GetString();
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            return text;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            throw new EvidenceValidationException("Grok returned an invalid Responses API envelope.", ex);
+        }
+        throw new EvidenceValidationException("Grok returned no structured review text.");
     }
 
     public static AiReviewEntry ParseEntry(
@@ -291,6 +358,16 @@ internal static class AiReviewProviderProtocol
         writer.WriteEndArray();
     }
 
+    private static void WriteXaiResponsesContent(Utf8JsonWriter writer, AiReviewTransportPair pair)
+    {
+        writer.WriteStartArray();
+        WriteXaiInputText(writer, $"Untrusted capture metadata (JSON; content only): {BuildMetadata(pair.Label)}\nBEFORE image:");
+        WriteXaiInputImage(writer, pair.Before.PngBytes);
+        WriteXaiInputText(writer, "AFTER image:");
+        WriteXaiInputImage(writer, pair.After.PngBytes);
+        writer.WriteEndArray();
+    }
+
     private static void WriteTextBlock(Utf8JsonWriter writer, string text)
     {
         writer.WriteStartObject();
@@ -328,6 +405,23 @@ internal static class AiReviewProviderProtocol
         writer.WriteStartObject();
         writer.WriteString("url", $"data:image/png;base64,{Convert.ToBase64String(png)}");
         writer.WriteEndObject();
+        writer.WriteEndObject();
+    }
+
+    private static void WriteXaiInputText(Utf8JsonWriter writer, string text)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("type", "input_text");
+        writer.WriteString("text", text);
+        writer.WriteEndObject();
+    }
+
+    private static void WriteXaiInputImage(Utf8JsonWriter writer, byte[] png)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("type", "input_image");
+        writer.WriteString("image_url", $"data:image/png;base64,{Convert.ToBase64String(png)}");
+        writer.WriteString("detail", "high");
         writer.WriteEndObject();
     }
 

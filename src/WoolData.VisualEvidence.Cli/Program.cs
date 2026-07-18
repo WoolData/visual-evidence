@@ -12,10 +12,10 @@ internal static class ProgramMain
 {
     private static readonly AiProviderProfile[] AiProviderProfiles =
     [
-        new("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", true, false),
-        new("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", false, true),
-        new("grok", "XAI_API_KEY", "https://api.x.ai/v1/", false, false),
-        new("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", false, false),
+        new("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", AiProviderProtocolKind.Anthropic, false),
+        new("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", AiProviderProtocolKind.OpenAiCompatible, true),
+        new("grok", "XAI_API_KEY", "https://api.x.ai/v1/", AiProviderProtocolKind.XaiResponses, false),
+        new("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", AiProviderProtocolKind.OpenAiCompatible, false),
     ];
 
     public static async Task<int> RunAsync(string[] args)
@@ -106,13 +106,27 @@ internal static class ProgramMain
         string providerName = ResolveAiProvider(options);
         AiProviderProfile profile = ResolveAiProviderProfile(providerName);
         AiReviewDocument review;
-        if (profile.UsesAnthropicProtocol)
+        if (profile.Protocol == AiProviderProtocolKind.Anthropic)
         {
             if (options.OptionalBool("ai-no-auth", false))
             {
                 throw new ArgumentException("--ai-no-auth is supported only with --ai-provider openai-compatible.");
             }
             using var provider = new AnthropicImageReviewProvider(new AnthropicImageReviewOptions
+            {
+                ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
+                Model = options.Required("ai-model"),
+                BaseUri = ResolveAiBaseUri(options, profile.BaseUrl),
+            });
+            review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        else if (profile.Protocol == AiProviderProtocolKind.XaiResponses)
+        {
+            if (options.OptionalBool("ai-no-auth", false))
+            {
+                throw new ArgumentException("--ai-no-auth is supported only with --ai-provider openai-compatible.");
+            }
+            using var provider = new GrokImageReviewProvider(new GrokImageReviewOptions
             {
                 ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
                 Model = options.Required("ai-model"),
@@ -648,8 +662,15 @@ internal sealed record AiProviderProfile(
     string Name,
     string KeyEnvironmentVariable,
     string BaseUrl,
-    bool UsesAnthropicProtocol,
+    AiProviderProtocolKind Protocol,
     bool AllowsNoAuth);
+
+internal enum AiProviderProtocolKind
+{
+    Anthropic,
+    OpenAiCompatible,
+    XaiResponses,
+}
 
 internal sealed class OptionReader
 {

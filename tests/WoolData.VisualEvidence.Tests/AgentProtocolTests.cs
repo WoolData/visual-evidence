@@ -274,22 +274,22 @@ public sealed class AgentProtocolTests
     }
 
     [Theory]
-    [InlineData("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", true, false)]
-    [InlineData("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", false, true)]
-    [InlineData("grok", "XAI_API_KEY", "https://api.x.ai/v1/", false, false)]
-    [InlineData("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", false, false)]
+    [InlineData("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", "Anthropic", false)]
+    [InlineData("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", "OpenAiCompatible", true)]
+    [InlineData("grok", "XAI_API_KEY", "https://api.x.ai/v1/", "XaiResponses", false)]
+    [InlineData("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", "OpenAiCompatible", false)]
     public void Review_ProviderProfilesPinCredentialEndpointAndProtocol(
         string name,
         string keyVariable,
         string baseUrl,
-        bool usesAnthropicProtocol,
+        string protocol,
         bool allowsNoAuth)
     {
         AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile(name);
 
         Assert.Equal(keyVariable, profile.KeyEnvironmentVariable);
         Assert.Equal(baseUrl, profile.BaseUrl);
-        Assert.Equal(usesAnthropicProtocol, profile.UsesAnthropicProtocol);
+        Assert.Equal(protocol, profile.Protocol.ToString());
         Assert.Equal(allowsNoAuth, profile.AllowsNoAuth);
     }
 

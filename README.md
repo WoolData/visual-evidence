@@ -167,7 +167,7 @@ visual-evidence review `
 If exactly one default provider key is set, the CLI infers that provider. If
 more than one is set, `--ai-provider anthropic|openai-compatible|grok|gemini`
 is required because the choice controls where screenshots leave the machine.
-Grok uses `XAI_API_KEY` and xAI's official endpoint; Gemini uses
+Grok uses `XAI_API_KEY` and xAI's current Responses API; Gemini uses
 `GEMINI_API_KEY` and Google's official OpenAI-compatible endpoint. Choose a
 model that supports image inputs and structured outputs; the CLI deliberately
 does not carry a moving model default. Credentials are read only from

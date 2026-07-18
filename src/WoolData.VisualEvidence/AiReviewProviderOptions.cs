@@ -23,3 +23,12 @@ public sealed record OpenAiCompatibleImageReviewOptions
 
     public Uri BaseUri { get; init; } = new("https://api.openai.com/v1/");
 }
+
+public sealed record GrokImageReviewOptions
+{
+    public required string ApiKey { get; init; }
+
+    public required string Model { get; init; }
+
+    public Uri BaseUri { get; init; } = new("https://api.x.ai/v1/");
+}
