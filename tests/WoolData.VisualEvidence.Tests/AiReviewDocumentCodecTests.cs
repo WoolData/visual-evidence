@@ -58,6 +58,9 @@ public sealed class AiReviewDocumentCodecTests
         Assert.DoesNotContain("\"summary\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"differences\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"area\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"beforeSha256\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"afterSha256\"", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"imageSha256\"", json, StringComparison.Ordinal);
         Assert.Null(roundTrip.Reviews.Single().AltText);
         Assert.Null(roundTrip.Reviews.Single().Summary);
         Assert.Null(roundTrip.Reviews.Single().Differences);
