@@ -92,6 +92,82 @@ public sealed class AgentProtocolTests
     }
 
     [Fact]
+    public async Task UnknownCommand_IsRejectedBeforeItsOptionsAreParsed()
+    {
+        TextWriter original = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetError(output);
+            int exitCode = await ProgramMain.RunAsync(["frobnicate", "--x", "y", "--json"]);
+
+            Assert.Equal(2, exitCode);
+            using JsonDocument document = JsonDocument.Parse(output.ToString());
+            Assert.Contains("Unknown command 'frobnicate'", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+    }
+
+    [Fact]
+    public async Task OptionValue_CannotConsumeFollowingOption()
+    {
+        TextWriter original = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetError(output);
+            int exitCode = await ProgramMain.RunAsync(["publish", "--summary", "--json"]);
+
+            Assert.Equal(2, exitCode);
+            using JsonDocument document = JsonDocument.Parse(output.ToString());
+            Assert.Contains("requires a value", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+    }
+
+    [Fact]
+    public async Task EnvironmentKey_SupportsStructuredOutputWithoutChangingPlainOutput()
+    {
+        string[] arguments =
+        [
+            "environment-key",
+            "--os", "macos",
+            "--architecture", "arm64",
+            "--runner-image", "macos-15-arm64",
+            "--capture-adapter", "avalonia-headless",
+            "--adapter-version", "1.0.0",
+            "--renderer", "skia",
+            "--render-scale", "1",
+            "--font-set-hash", "bundled-fonts-v1",
+        ];
+        TextWriter original = Console.Out;
+        using var plainOutput = new StringWriter();
+        using var jsonOutput = new StringWriter();
+        try
+        {
+            Console.SetOut(plainOutput);
+            Assert.Equal(0, await ProgramMain.RunAsync(arguments));
+            Console.SetOut(jsonOutput);
+            Assert.Equal(0, await ProgramMain.RunAsync([.. arguments, "--json"]));
+
+            string key = plainOutput.ToString().Trim();
+            using JsonDocument document = JsonDocument.Parse(jsonOutput.ToString());
+            Assert.True(document.RootElement.GetProperty("ok").GetBoolean());
+            Assert.Equal(key, document.RootElement.GetProperty("compatibilityKey").GetString());
+        }
+        finally
+        {
+            Console.SetOut(original);
+        }
+    }
+
+    [Fact]
     public async Task Publish_RejectsOverlongSummaryBeforeGitHubAccess()
     {
         TextWriter original = Console.Error;

@@ -69,15 +69,7 @@ public sealed class EvidencePublicationService
         }
         catch
         {
-            if (_statuses is not null)
-            {
-                await _statuses.PublishStatusAsync(
-                    revision.HeadRevision,
-                    "failure",
-                    "Visual evidence publication failed.",
-                    "visual-evidence/published",
-                    cancellationToken).ConfigureAwait(false);
-            }
+            await TryPublishFailureStatusAsync(revision.HeadRevision, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
@@ -119,16 +111,30 @@ public sealed class EvidencePublicationService
         }
         catch
         {
-            if (_statuses is not null)
-            {
-                await _statuses.PublishStatusAsync(
-                    revision.HeadRevision,
-                    "failure",
-                    "Visual evidence publication failed.",
-                    "visual-evidence/published",
-                    cancellationToken).ConfigureAwait(false);
-            }
+            await TryPublishFailureStatusAsync(revision.HeadRevision, cancellationToken).ConfigureAwait(false);
             throw;
+        }
+    }
+
+    private async Task TryPublishFailureStatusAsync(string revision, CancellationToken cancellationToken)
+    {
+        if (_statuses is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _statuses.PublishStatusAsync(
+                revision,
+                "failure",
+                "Visual evidence publication failed.",
+                "visual-evidence/published",
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Failure status is best effort; the original publication exception is authoritative.
         }
     }
 

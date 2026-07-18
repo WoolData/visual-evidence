@@ -8,6 +8,18 @@ Contributions are welcome.
 4. Run `dotnet test VisualEvidence.slnx --configuration Release`.
 5. Do not introduce provider-specific fields into the neutral manifest without discussing the portability impact.
 
+## macOS SDK Note
+
+Use Microsoft's official .NET SDK distribution or `dotnet-install.sh` when
+building this repository on macOS. Homebrew's source-built SDK can provide
+locally rebuilt AOT packs whose content hashes differ from the nuget.org packs
+recorded in `packages.lock.json`.
+
+If restore reports `NU1403` for `Microsoft.NET.ILLink.Tasks` or
+`Microsoft.DotNet.ILCompiler`, switch to an official SDK and remove those two
+package directories from `~/.nuget/packages` before restoring again. A failed
+Homebrew restore can leave the incompatible packages in the shared cache.
+
 ## Released Action Canary
 
 After changing the Action bootstrap or release packaging, run the trusted canary against an open pull request:

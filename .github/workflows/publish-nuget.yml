@@ -53,6 +53,10 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
           VERSION: ${{ inputs.version }}
         run: |
+          $sdkVersion = [Version]((dotnet --version).Split('-')[0])
+          if ($sdkVersion -lt [Version]'10.0.300') {
+            throw "Environment-based NuGet authentication requires .NET SDK 10.0.300 or newer; found $sdkVersion."
+          }
           if ([string]::IsNullOrWhiteSpace($env:NUGET_API_KEY)) {
             throw 'The nuget-org environment must provide NUGET_API_KEY.'
           }

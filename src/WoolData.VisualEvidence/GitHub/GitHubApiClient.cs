@@ -89,42 +89,11 @@ public sealed class GitHubApiClient :
             entries.Add(new PendingAsset(pair.Key, pair.Label, afterPath, afterBlob, false));
         }
 
-        string? commitSha = null;
-        for (int attempt = 1; attempt <= _options.MaximumPublishAttempts; attempt++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            GitReference? reference = await TryGetReferenceAsync(cancellationToken).ConfigureAwait(false);
-            string? parentSha = reference?.Sha;
-            string? baseTreeSha = parentSha is null
-                ? null
-                : await GetCommitTreeAsync(parentSha, cancellationToken).ConfigureAwait(false);
-            string treeSha = await CreateTreeAsync(entries, baseTreeSha, cancellationToken).ConfigureAwait(false);
-            if (parentSha is not null && string.Equals(treeSha, baseTreeSha, StringComparison.OrdinalIgnoreCase))
-            {
-                commitSha = parentSha;
-                break;
-            }
-            string candidate = await CreateCommitAsync(
-                $"Add visual evidence for change #{changeNumber} at {headRevision}",
-                treeSha,
-                parentSha,
-                cancellationToken).ConfigureAwait(false);
-            try
-            {
-                await UpdateReferenceAsync(candidate, parentSha is null, cancellationToken).ConfigureAwait(false);
-                commitSha = candidate;
-                break;
-            }
-            catch (GitHubApiException ex) when (attempt < _options.MaximumPublishAttempts && ex.StatusCode is HttpStatusCode.Conflict or HttpStatusCode.UnprocessableEntity)
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(150 * attempt), cancellationToken).ConfigureAwait(false);
-            }
-        }
-
-        if (commitSha is null)
-        {
-            throw new GitHubApiException(HttpStatusCode.Conflict, "Could not update the evidence branch after concurrent publication retries.");
-        }
+        string commitSha = await PublishEntriesAsync(
+            changeNumber,
+            headRevision,
+            entries,
+            cancellationToken).ConfigureAwait(false);
 
         IReadOnlyList<PublishedAsset> assets = evidence.Captures.Select(pair => new PublishedAsset(
             pair.Key,

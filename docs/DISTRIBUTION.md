@@ -12,7 +12,7 @@ One-time setup:
 2. Create a scoped push API key for `WoolData.VisualEvidence.Tool`.
 3. Create the `nuget-org` GitHub environment, add `NUGET_API_KEY`, and configure
    required reviewers if desired.
-4. Run `Publish NuGet Package` with an existing release version such as `0.2.3`.
+4. Run `Publish NuGet Package` with an existing release version such as `0.2.4`.
 
 The workflow downloads the package from the immutable GitHub release, verifies
 its SHA-256 and GitHub artifact attestation, and then publishes it. The API key
@@ -31,7 +31,7 @@ Marketplace publication requires an organization owner in GitHub's release UI:
    GitHub Marketplace**.
 3. Confirm the unique `Visual Evidence` name and choose the most relevant
    continuous-integration/code-quality categories offered by the UI.
-4. Publish, then verify the listing installs `WoolData/visual-evidence@v0.2.3`.
+4. Publish, then verify the listing installs `WoolData/visual-evidence@v0.2.4`.
 
 GitHub requires this human flow, including two-factor authentication. Do not
 automate it with browser credentials.
