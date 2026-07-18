@@ -41,6 +41,25 @@ public sealed class SchemaContractTests
             .GetProperty("reviews")
             .GetProperty("maxItems")
             .GetInt32());
+        string[] requiredReviewProperties = schema.RootElement
+            .GetProperty("$defs")
+            .GetProperty("review")
+            .GetProperty("required")
+            .EnumerateArray()
+            .Select(static item => item.GetString()!)
+            .ToArray();
+        Assert.DoesNotContain("altText", requiredReviewProperties);
+        Assert.DoesNotContain("summary", requiredReviewProperties);
+        Assert.DoesNotContain("differences", requiredReviewProperties);
+        Assert.DoesNotContain("issues", requiredReviewProperties);
+        string[] requiredIssueProperties = schema.RootElement
+            .GetProperty("$defs")
+            .GetProperty("issue")
+            .GetProperty("required")
+            .EnumerateArray()
+            .Select(static item => item.GetString()!)
+            .ToArray();
+        Assert.DoesNotContain("area", requiredIssueProperties);
     }
 
     [Fact]

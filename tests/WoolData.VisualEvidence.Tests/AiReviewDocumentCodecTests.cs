@@ -50,12 +50,18 @@ public sealed class AiReviewDocumentCodecTests
             ],
         };
 
-        string json = Encoding.UTF8.GetString(AiReviewDocumentCodec.Serialize(document));
+        byte[] bytes = AiReviewDocumentCodec.Serialize(document);
+        string json = Encoding.UTF8.GetString(bytes);
+        AiReviewDocument roundTrip = AiReviewDocumentCodec.Read(bytes);
 
         Assert.DoesNotContain("\"altText\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"summary\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"differences\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"area\"", json, StringComparison.Ordinal);
+        Assert.Null(roundTrip.Reviews.Single().AltText);
+        Assert.Null(roundTrip.Reviews.Single().Summary);
+        Assert.Null(roundTrip.Reviews.Single().Differences);
+        Assert.Null(roundTrip.Reviews.Single().Issues!.Single().Area);
     }
 
     [Fact]
