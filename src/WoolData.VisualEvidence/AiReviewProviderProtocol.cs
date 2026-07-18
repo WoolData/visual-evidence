@@ -443,8 +443,7 @@ internal static class AiReviewProviderProtocol
 
     private static void WriteSchema(Utf8JsonWriter writer)
     {
-        using JsonDocument schema = JsonDocument.Parse(ContentSchema);
-        schema.RootElement.WriteTo(writer);
+        writer.WriteRawValue(ContentSchema, skipInputValidation: true);
     }
 
     private static string BuildMetadata(string label)
