@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Capture before and after
         run: ./your-capture-command --output evidence
-      - uses: WoolData/visual-evidence@v0.1.2
+      - uses: WoolData/visual-evidence@v0.2.0
         with:
           evidence-root: evidence
           summary: Keeps primary actions visible at compact window sizes.
@@ -116,6 +116,8 @@ For standalone screenshots, replace `evidence-root` with `image-root`, or pass n
 Pin the Action to a full commit SHA in security-sensitive repositories. The tag above keeps the introductory example readable.
 
 Normal Action invocations download the platform-specific NativeAOT archive declared in [`tool-manifest.json`](tool-manifest.json), verify its SHA-256 and GitHub artifact attestation, and run it directly from the runner's temporary tool directory. Windows x64, Linux x64, and both Apple Silicon and Intel macOS are supported. The Action does not require .NET or compile repository source for consumers. Contributors testing an unreleased source change may opt in with `use-source: true`.
+
+The repository's manually dispatched `Native Action Canary` workflow exercises this exact consumer path with the default `GITHUB_TOKEN`. It publishes a real PNG through the released Action and asserts the reported mode and capture count without compiling the tool from source.
 
 To publish the optional `visual-evidence/published` commit status, grant `statuses: write` and set `publish-status: true`.
 
