@@ -1,0 +1,50 @@
+name: Native Action Canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull-request-number:
+        description: Open pull request that receives the canary evidence comment.
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: native-action-canary-${{ inputs.pull-request-number }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish with released NativeAOT action
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Materialize trusted canary image
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts -Force | Out-Null
+          $bytes = [Convert]::FromBase64String((Get-Content examples/native-smoke.png.base64 -Raw).Trim())
+          [IO.File]::WriteAllBytes('artifacts/native-action-canary.png', $bytes)
+      - name: Publish through the released Action
+        id: evidence
+        uses: WoolData/visual-evidence@v0.2.0
+        with:
+          images: artifacts/native-action-canary.png
+          summary: NativeAOT Action canary using a verified release archive and the default GITHUB_TOKEN.
+          pull-request-number: ${{ inputs.pull-request-number }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Assert publication result
+        shell: pwsh
+        env:
+          ASSET_COMMIT: ${{ steps.evidence.outputs.asset-commit }}
+          CAPTURE_COUNT: ${{ steps.evidence.outputs.capture-count }}
+          MODE: ${{ steps.evidence.outputs.mode }}
+        run: |
+          if ($env:ASSET_COMMIT -notmatch '^[0-9a-f]{40}$' -or
+              $env:CAPTURE_COUNT -ne '1' -or
+              $env:MODE -ne 'images') {
+            throw "Unexpected Action outputs: asset=$env:ASSET_COMMIT captures=$env:CAPTURE_COUNT mode=$env:MODE"
+          }
