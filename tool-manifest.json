@@ -1,7 +1,19 @@
 {
-  "schemaVersion": 1,
-  "packageId": "WoolData.VisualEvidence.Tool",
-  "version": "0.1.2",
-  "packageUrl": "https://github.com/WoolData/visual-evidence/releases/download/v0.1.2/WoolData.VisualEvidence.Tool.0.1.2.nupkg",
-  "sha256": "9219097497a5f0a763cad1a7ada41bd2c7d142d89172c7078ac6d72bdf733ccc"
+  "schemaVersion": 2,
+  "version": "0.2.0",
+  "repository": "WoolData/visual-evidence",
+  "artifacts": {
+    "win-x64": {
+      "archive": "visual-evidence-v0.2.0-win-x64.zip",
+      "executable": "visual-evidence.exe"
+    },
+    "linux-x64": {
+      "archive": "visual-evidence-v0.2.0-linux-x64.zip",
+      "executable": "visual-evidence"
+    },
+    "osx-arm64": {
+      "archive": "visual-evidence-v0.2.0-osx-arm64.zip",
+      "executable": "visual-evidence"
+    }
+  }
 }

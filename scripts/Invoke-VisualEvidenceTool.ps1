@@ -8,9 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $actionRoot = Split-Path -Parent $PSScriptRoot
-$useSource = $env:VISUAL_EVIDENCE_USE_SOURCE -eq 'true'
-
-if ($useSource) {
+if ($env:VISUAL_EVIDENCE_USE_SOURCE -eq 'true') {
     & dotnet run `
         --project (Join-Path $actionRoot 'src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj') `
         --configuration Release `
@@ -19,14 +17,26 @@ if ($useSource) {
     exit $LASTEXITCODE
 }
 
+$rid = if ($IsWindows -and [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64') {
+    'win-x64'
+} elseif ($IsLinux -and [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64') {
+    'linux-x64'
+} elseif ($IsMacOS -and [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') {
+    'osx-arm64'
+} else {
+    throw "No packaged Visual Evidence tool supports this runner: $([System.Runtime.InteropServices.RuntimeInformation]::OSDescription) $([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)."
+}
+
 $manifestPath = Join-Path $actionRoot 'tool-manifest.json'
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if ($manifest.schemaVersion -ne 1 -or
-    [string]::IsNullOrWhiteSpace($manifest.packageId) -or
-    [string]::IsNullOrWhiteSpace($manifest.version) -or
-    [string]::IsNullOrWhiteSpace($manifest.packageUrl) -or
-    $manifest.sha256 -notmatch '^[0-9a-fA-F]{64}$') {
-    throw "Invalid packaged-tool manifest: $manifestPath"
+$artifact = $manifest.artifacts.$rid
+if ($manifest.schemaVersion -ne 2 -or
+    $manifest.version -notmatch '^\d+\.\d+\.\d+$' -or
+    $manifest.repository -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' -or
+    $null -eq $artifact -or
+    [string]::IsNullOrWhiteSpace($artifact.archive) -or
+    [string]::IsNullOrWhiteSpace($artifact.executable)) {
+    throw "Invalid packaged-tool manifest for ${rid}: $manifestPath"
 }
 
 $cacheRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
@@ -34,31 +44,47 @@ $cacheRoot = if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
 } else {
     Join-Path $env:RUNNER_TEMP 'wooldata-visual-evidence'
 }
-$versionRoot = Join-Path $cacheRoot $manifest.version
-$packageRoot = Join-Path $versionRoot 'package'
+$versionRoot = Join-Path $cacheRoot "$($manifest.version)-$rid"
 $toolRoot = Join-Path $versionRoot 'tool'
-$executableName = if ($IsWindows) { 'visual-evidence.exe' } else { 'visual-evidence' }
-$executable = Join-Path $toolRoot $executableName
+$executable = Join-Path $toolRoot $artifact.executable
+$verifiedMarker = Join-Path $versionRoot 'attestation-verified'
 
-if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
-    New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
-    $packagePath = Join-Path $packageRoot "$($manifest.packageId).$($manifest.version).nupkg"
-    Invoke-WebRequest -Uri $manifest.packageUrl -OutFile $packagePath
-    $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
-    if (-not [string]::Equals($actualHash, $manifest.sha256, [System.StringComparison]::OrdinalIgnoreCase)) {
-        Remove-Item -LiteralPath $packagePath -Force -ErrorAction SilentlyContinue
-        throw "Packaged tool SHA-256 mismatch. Expected $($manifest.sha256); received $actualHash."
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf) -or
+    -not (Test-Path -LiteralPath $verifiedMarker -PathType Leaf)) {
+    New-Item -ItemType Directory -Path $versionRoot -Force | Out-Null
+    $archivePath = Join-Path $versionRoot $artifact.archive
+    $checksumPath = "$archivePath.sha256"
+    $releaseRoot = "https://github.com/$($manifest.repository)/releases/download/v$($manifest.version)"
+    Invoke-WebRequest -Uri "$releaseRoot/$($artifact.archive)" -OutFile $archivePath
+    Invoke-WebRequest -Uri "$releaseRoot/$($artifact.archive).sha256" -OutFile $checksumPath
+
+    $expectedHash = (Get-Content -LiteralPath $checksumPath -Raw).Trim().Split(' ')[0]
+    $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash
+    if ($expectedHash -notmatch '^[0-9a-fA-F]{64}$' -or
+        -not [string]::Equals($actualHash, $expectedHash, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Packaged tool SHA-256 mismatch. Expected $expectedHash; received $actualHash."
     }
 
-    Remove-Item -LiteralPath $toolRoot -Recurse -Force -ErrorAction SilentlyContinue
-    & dotnet tool install $manifest.packageId `
-        --tool-path $toolRoot `
-        --version $manifest.version `
-        --add-source $packageRoot `
-        --ignore-failed-sources
+    if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
+        throw 'GitHub CLI is required to verify the packaged tool attestation.'
+    }
+    & gh attestation verify $archivePath --repo $manifest.repository | Out-Null
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
+
+    if (Test-Path -LiteralPath $toolRoot) {
+        Remove-Item -LiteralPath $toolRoot -Recurse -Force
+    }
+    Expand-Archive -LiteralPath $archivePath -DestinationPath $toolRoot
+    if (-not $IsWindows) {
+        & chmod +x $executable
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        throw "Verified archive omitted the expected executable: $($artifact.executable)"
+    }
+    Set-Content -LiteralPath $verifiedMarker -Value $actualHash -NoNewline
 }
 
 & $executable @ToolArguments

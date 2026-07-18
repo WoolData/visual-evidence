@@ -56,7 +56,8 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Set up .NET
+    - name: Set up .NET for source-mode testing
+      if: inputs.use-source == 'true'
       uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
       with:
         dotnet-version: 10.0.x
