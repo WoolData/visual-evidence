@@ -39,6 +39,10 @@ inputs:
     description: Publish visual-evidence/published commit status. Requires statuses write permission.
     required: false
     default: "false"
+  use-source:
+    description: Compile from the checked-out Action source for contributor testing. Consumers should keep this false.
+    required: false
+    default: "false"
 outputs:
   asset-commit:
     description: Immutable commit containing the published images.
@@ -69,6 +73,7 @@ runs:
         VISUAL_EVIDENCE_ASSETS_BRANCH: ${{ inputs.assets-branch }}
         VISUAL_EVIDENCE_COMMENT_AUTHOR: ${{ inputs.comment-author-login }}
         VISUAL_EVIDENCE_PUBLISH_STATUS: ${{ inputs.publish-status }}
+        VISUAL_EVIDENCE_USE_SOURCE: ${{ inputs.use-source }}
         GITHUB_TOKEN: ${{ inputs.github-token }}
       run: |
         $commentAuthorArgs = if ([string]::IsNullOrWhiteSpace($env:VISUAL_EVIDENCE_COMMENT_AUTHOR)) {
@@ -93,11 +98,7 @@ runs:
           @($env:VISUAL_EVIDENCE_IMAGES -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { "--image"; $_ })
         }
 
-        $result = dotnet run `
-          --project (Join-Path $env:GITHUB_ACTION_PATH "src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj") `
-          --configuration Release `
-          --property:RestoreLockedMode=true `
-          -- `
+        $result = & (Join-Path $env:GITHUB_ACTION_PATH "scripts/Invoke-VisualEvidenceTool.ps1") `
           publish `
           --repository $env:VISUAL_EVIDENCE_REPOSITORY `
           --change-number $env:VISUAL_EVIDENCE_PR `

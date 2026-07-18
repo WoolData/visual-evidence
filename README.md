@@ -115,6 +115,8 @@ For standalone screenshots, replace `evidence-root` with `image-root`, or pass n
 
 Pin the Action to a full commit SHA in security-sensitive repositories. The tag above keeps the introductory example readable.
 
+Normal Action invocations download the exact tool package declared in [`tool-manifest.json`](tool-manifest.json), verify its SHA-256, and install it into the runner's temporary tool directory. The Action does not compile repository source for consumers. Contributors testing an unreleased source change may opt in with `use-source: true`.
+
 To publish the optional `visual-evidence/published` commit status, grant `statuses: write` and set `publish-status: true`.
 
 The default `GITHUB_TOKEN` and user tokens are both supported. When using a custom GitHub App installation token, set `comment-author-login` to that App's bot login, such as `my-app[bot]`, so repeated runs update only the App's own evidence comment.
