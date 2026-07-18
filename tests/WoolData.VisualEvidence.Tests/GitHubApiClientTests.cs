@@ -194,6 +194,20 @@ public sealed class GitHubApiClientTests
     }
 
     [Fact]
+    public async Task ResolveRevisionAsync_WrapsTransportFailure()
+    {
+        var handler = new RecordingHandler(_ => throw new HttpRequestException("connection details"));
+        using var client = CreateClient(handler);
+
+        GitHubApiException exception = await Assert.ThrowsAsync<GitHubApiException>(() =>
+            client.ResolveRevisionAsync(17, TestContext.Current.CancellationToken));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, exception.StatusCode);
+        Assert.Equal("GitHub API request could not be completed.", exception.Message);
+        Assert.IsType<HttpRequestException>(exception.InnerException);
+    }
+
+    [Fact]
     public async Task PublishOrUpdateAsync_UsesConfiguredCustomAppLoginWithoutUserLookup()
     {
         var handler = new RecordingHandler(request =>

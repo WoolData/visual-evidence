@@ -33,6 +33,7 @@ internal static class ProgramMain
 
             string command = args[0].ToLowerInvariant();
             var options = OptionReader.Parse(args[1..]);
+            EnsureAllowedOptions(command, options);
             return command switch
             {
                 "validate" => await ValidateAsync(options, cancellation.Token).ConfigureAwait(false),
@@ -55,6 +56,11 @@ internal static class ProgramMain
             string code = ErrorCode(ex);
             WriteError(code, ex.Message, args.Contains("--json", StringComparer.OrdinalIgnoreCase));
             return ex is ArgumentException ? 2 : 1;
+        }
+        catch (Exception)
+        {
+            WriteError("unexpected_error", "Unexpected failure.", args.Contains("--json", StringComparer.OrdinalIgnoreCase));
+            return 1;
         }
     }
 
@@ -99,6 +105,7 @@ internal static class ProgramMain
 
     private static async Task<int> PublishAsync(OptionReader options, CancellationToken cancellationToken)
     {
+        string summary = options.RequiredLimited("summary", 2000);
         string repository = ResolveRepository(options);
         int changeNumber = options.RequiredInt("change-number");
         string token = ResolveToken(options);
@@ -127,7 +134,7 @@ internal static class ProgramMain
             AssetPublication publication = await service.PublishAsync(
                 changeNumber,
                 evidenceRoot,
-                options.Required("summary"),
+                summary,
                 cancellationToken).ConfigureAwait(false);
             WriteJson(
                 new AgentPublishResult(
@@ -145,7 +152,7 @@ internal static class ProgramMain
         ImageAssetPublication imagePublication = await service.PublishImagesAsync(
             changeNumber,
             images,
-            options.Required("summary"),
+            summary,
             new EvidenceImageSetValidator(BuildValidationOptions(options), options.Optional("image-root")),
             cancellationToken).ConfigureAwait(false);
         WriteJson(
@@ -229,7 +236,7 @@ internal static class ProgramMain
                     ["invalidArguments"] = 2,
                     ["canceled"] = 130,
                 },
-                ["invalid_arguments", "invalid_evidence", "github_api_error", "io_error", "canceled"]),
+                ["invalid_arguments", "invalid_evidence", "github_api_error", "io_error", "unexpected_error", "canceled"]),
             AgentProtocolJsonContext.Default.AgentDescription);
         return 0;
     }
@@ -249,6 +256,7 @@ internal static class ProgramMain
             options.Required("capture-root"),
             options.Required("output"),
             ReadEnvironment(options),
+            BuildValidationOptions(options),
             cancellationToken).ConfigureAwait(false);
         WriteJson(
             new AgentManifestResult(
@@ -275,12 +283,7 @@ internal static class ProgramMain
             {
                 throw new ArgumentException($"--image-root does not exist: {root}");
             }
-            return Directory.GetFiles(root, "*.png", new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                AttributesToSkip = FileAttributes.ReparsePoint,
-                MatchCasing = MatchCasing.CaseInsensitive,
-            });
+            return EvidenceImageSetValidator.EnumerateDirectory(root);
         }
         return individual.Count > 0
             ? individual.ToArray()
@@ -293,6 +296,25 @@ internal static class ProgramMain
         {
             throw new ArgumentException("--evidence-root cannot be combined with --image-root or --image.");
         }
+    }
+
+    private static void EnsureAllowedOptions(string command, OptionReader options)
+    {
+        string[] commonValidation = ["maximum-image-bytes", "maximum-pixels", "maximum-captures", "allow-single-color", "json"];
+        string[] environment = ["os", "architecture", "runner-image", "capture-adapter", "adapter-version", "renderer", "render-scale", "font-set-hash"];
+        string[] github = ["repository", "change-number", "assets-branch", "comment-author-login", "token-environment-variable", "api-url", "json"];
+
+        string[] allowed = command switch
+        {
+            "validate" => ["evidence-root", "expected-base", "expected-head", "image-root", "image", .. commonValidation],
+            "publish" => ["evidence-root", "image-root", "image", "summary", "publish-status", .. github, .. commonValidation],
+            "verify" or "doctor" => github,
+            "describe" => ["json"],
+            "environment-key" => environment,
+            "manifest" => ["snapshot", "revision", "capture-root", "output", .. environment, .. commonValidation],
+            _ => [],
+        };
+        options.EnsureOnly(command, allowed);
     }
 
     private static void WriteJson<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo) =>
@@ -380,6 +402,7 @@ internal static class ProgramMain
                               --renderer NAME --render-scale N --font-set-hash HASH
 
             Publish options:
+              --summary TEXT                       Required; maximum 2000 characters
               --assets-branch NAME                 Default: visual-evidence-assets
               --api-url URL                        Default: GITHUB_API_URL or api.github.com
               --comment-author-login LOGIN         Optional custom GitHub App bot login
@@ -434,9 +457,27 @@ internal sealed class OptionReader
 
     public string Required(string name) => Optional(name) ?? throw new ArgumentException($"--{name} is required.");
 
+    public string RequiredLimited(string name, int maximumLength)
+    {
+        string value = Required(name);
+        return value.Length <= maximumLength
+            ? value
+            : throw new ArgumentException($"--{name} must be no longer than {maximumLength} characters.");
+    }
+
     public string? Optional(string name) => _values.TryGetValue(name, out IReadOnlyList<string>? values) ? values[^1] : null;
 
     public IReadOnlyList<string> All(string name) => _values.TryGetValue(name, out IReadOnlyList<string>? values) ? values : Array.Empty<string>();
+
+    public void EnsureOnly(string command, IEnumerable<string> allowed)
+    {
+        var permitted = new HashSet<string>(allowed, StringComparer.OrdinalIgnoreCase);
+        string? unknown = _values.Keys.FirstOrDefault(key => !permitted.Contains(key));
+        if (unknown is not null)
+        {
+            throw new ArgumentException($"Unknown option '--{unknown}' for command '{command}'.");
+        }
+    }
 
     public int RequiredInt(string name) => ParseInt(name, Required(name));
 

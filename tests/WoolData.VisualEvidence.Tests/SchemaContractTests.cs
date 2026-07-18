@@ -19,6 +19,23 @@ public sealed class SchemaContractTests
         }
     }
 
+    [Fact]
+    public void PublishedSchemaAcceptsUppercasePngPathsLikeTheRuntime()
+    {
+        string schemaPath = Path.Combine(FindRepositoryRoot(), "schema", "evidence-manifest-v1.schema.json");
+        using JsonDocument schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
+        string pattern = schema.RootElement
+            .GetProperty("properties")
+            .GetProperty("captures")
+            .GetProperty("items")
+            .GetProperty("properties")
+            .GetProperty("path")
+            .GetProperty("pattern")
+            .GetString()!;
+
+        Assert.Matches(new Regex(pattern, RegexOptions.CultureInvariant), "captures/Home.PNG");
+    }
+
     private static IEnumerable<string> FindPatterns(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)

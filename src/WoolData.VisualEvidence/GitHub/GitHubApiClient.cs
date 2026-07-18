@@ -435,19 +435,41 @@ public sealed class GitHubApiClient :
         {
             request.Content = new StringContent(payload, Encoding.UTF8, "application/json");
         }
-        using HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (allowedMissingStatus is not null && response.StatusCode == allowedMissingStatus)
+        HttpResponseMessage response;
+        try
         {
-            return null;
+            response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
-        string responseText = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        catch (HttpRequestException ex)
         {
-            throw new GitHubApiException(
-                response.StatusCode,
-                $"GitHub API request failed ({method} {endpoint}): {SanitizeError(responseText)}");
+            throw new GitHubApiException(HttpStatusCode.ServiceUnavailable, "GitHub API request could not be completed.", ex);
         }
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(responseText) ? "{}" : responseText);
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new GitHubApiException(HttpStatusCode.RequestTimeout, "GitHub API request timed out.", ex);
+        }
+        using (response)
+        {
+            if (allowedMissingStatus is not null && response.StatusCode == allowedMissingStatus)
+            {
+                return null;
+            }
+            string responseText = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new GitHubApiException(
+                    response.StatusCode,
+                    $"GitHub API request failed ({method} {endpoint}): {SanitizeError(responseText)}");
+            }
+            try
+            {
+                return JsonDocument.Parse(string.IsNullOrWhiteSpace(responseText) ? "{}" : responseText);
+            }
+            catch (JsonException ex)
+            {
+                throw new GitHubApiException(HttpStatusCode.BadGateway, "GitHub API returned an invalid JSON response.", ex);
+            }
+        }
     }
 
     private static string RequiredString(JsonElement element, string property)
@@ -476,8 +498,8 @@ public sealed class GitHubApiClient :
 
 public sealed class GitHubApiException : Exception
 {
-    public GitHubApiException(HttpStatusCode statusCode, string message)
-        : base(message)
+    public GitHubApiException(HttpStatusCode statusCode, string message, Exception? innerException = null)
+        : base(message, innerException)
     {
         StatusCode = statusCode;
     }
