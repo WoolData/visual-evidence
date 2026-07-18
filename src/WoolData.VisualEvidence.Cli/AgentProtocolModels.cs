@@ -49,13 +49,18 @@ internal sealed record AgentDescription(
     int ProtocolVersion,
     string Purpose,
     bool CaptureIsExternal,
+    string TokenEnvironmentVariable,
+    bool RepublishIsIdempotent,
+    IReadOnlyDictionary<string, string> EnvironmentVariables,
     IReadOnlyDictionary<string, AgentCommandDescription> Commands,
+    IReadOnlyList<string> Workflow,
     IReadOnlyDictionary<string, int> ExitCodes,
     IReadOnlyList<string> ErrorCodes);
 
 internal sealed record AgentCommandDescription(
     IReadOnlyList<string>? Modes = null,
     IReadOnlyList<string>? Requires = null,
+    IReadOnlyList<string>? Options = null,
     string? Purpose = null);
 
 internal sealed record AgentErrorEnvelope(bool Ok, AgentError Error);

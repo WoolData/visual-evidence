@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Wool Data Inc. Licensed under the MIT License.
 
 using System.Text.Json;
+using System.Text;
 
 namespace WoolData.VisualEvidence.Tests;
 
@@ -24,6 +25,21 @@ public sealed class AgentProtocolTests
             Assert.Equal("visual-evidence", document.RootElement.GetProperty("name").GetString());
             Assert.Equal(1, document.RootElement.GetProperty("protocolVersion").GetInt32());
             Assert.True(document.RootElement.GetProperty("captureIsExternal").GetBoolean());
+            Assert.Equal("GITHUB_TOKEN", document.RootElement.GetProperty("tokenEnvironmentVariable").GetString());
+            Assert.True(document.RootElement.GetProperty("republishIsIdempotent").GetBoolean());
+            Assert.Equal(
+                3,
+                document.RootElement.GetProperty("environmentVariables").EnumerateObject().Count());
+            Assert.Equal(3, document.RootElement.GetProperty("workflow").GetArrayLength());
+            JsonElement.ArrayEnumerator publishOptions = document.RootElement
+                .GetProperty("commands")
+                .GetProperty("publish")
+                .GetProperty("options")
+                .EnumerateArray();
+            string[] optionNames = publishOptions.Select(static option => option.GetString()!).ToArray();
+            Assert.Contains("--summary", optionNames);
+            Assert.Equal(optionNames.Length, optionNames.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.InRange(Encoding.UTF8.GetByteCount(json), 1, 4096);
         }
         finally
         {
@@ -99,6 +115,42 @@ public sealed class AgentProtocolTests
         {
             Console.SetError(original);
         }
+    }
+
+    [Fact]
+    public void BundledSkill_StaysWithinAgentContextBudget()
+    {
+        string path = Path.Combine(FindRepositoryRoot(), "skills", "visual-evidence", "SKILL.md");
+        string skill = File.ReadAllText(path);
+
+        Assert.InRange(Encoding.UTF8.GetByteCount(skill), 1, 3000);
+        Assert.Contains("visual-evidence describe --json", skill, StringComparison.Ordinal);
+        Assert.Contains("GITHUB_TOKEN", skill, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void LlmsIndex_StaysCompactAndPointsToMachineReadableDiscovery()
+    {
+        string path = Path.Combine(FindRepositoryRoot(), "llms.txt");
+        string index = File.ReadAllText(path);
+
+        Assert.InRange(Encoding.UTF8.GetByteCount(index), 1, 4096);
+        Assert.Contains("visual-evidence describe --json", index, StringComparison.Ordinal);
+        Assert.Contains("skills/visual-evidence/SKILL.md", index, StringComparison.Ordinal);
+        Assert.Contains("schema/agent-protocol-v1.json", index, StringComparison.Ordinal);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "VisualEvidence.slnx")))
+            {
+                return directory.FullName;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the Visual Evidence repository root.");
     }
 }
 

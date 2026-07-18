@@ -21,3 +21,4 @@ visual-evidence publish --repository OWNER/REPO --change-number N --evidence-roo
 5. Run `visual-evidence verify --repository OWNER/REPO --change-number N --json`.
 
 Stop on a nonzero exit code or `"ok":false`. Report the compact JSON result; do not paste normal command logs.
+Re-running `publish` is safe: it updates this publisher's marked comment and avoids empty evidence commits.
