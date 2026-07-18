@@ -69,13 +69,16 @@ internal static class ProgramMain
         if (root is null)
         {
             string[] images = ResolveImages(options);
-            ValidatedImageSet imageSet = await new EvidenceImageSetValidator(BuildValidationOptions(options))
+            ValidatedImageSet imageSet = await new EvidenceImageSetValidator(
+                    BuildValidationOptions(options),
+                    options.Optional("image-root"))
                 .ValidateAsync(images, cancellationToken).ConfigureAwait(false);
             WriteJson(
                 new AgentValidationResult(true, "images", imageSet.Images.Count),
                 AgentProtocolJsonContext.Default.AgentValidationResult);
             return 0;
         }
+        EnsureNoSimpleImages(options);
         var validator = new EvidencePairValidator(BuildValidationOptions(options));
         ValidatedEvidencePair evidence = await validator.ValidateAsync(
             root,
@@ -143,7 +146,7 @@ internal static class ProgramMain
             changeNumber,
             images,
             options.Required("summary"),
-            new EvidenceImageSetValidator(BuildValidationOptions(options)),
+            new EvidenceImageSetValidator(BuildValidationOptions(options), options.Optional("image-root")),
             cancellationToken).ConfigureAwait(false);
         WriteJson(
             new AgentPublishResult(
@@ -408,7 +411,7 @@ internal sealed class OptionReader
                 throw new ArgumentException($"Expected '--name value', received '{name}'.");
             }
             string key = name[2..];
-            bool flag = key is "json" or "quiet" or "no-color";
+            bool flag = key is "json";
             if (!flag && index + 1 >= args.Length)
             {
                 throw new ArgumentException($"Option '{name}' requires a value.");

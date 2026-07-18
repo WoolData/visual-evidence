@@ -48,6 +48,28 @@ public sealed class EvidenceImageSetValidatorTests
         }
     }
 
+    [Fact]
+    public async Task ValidateDirectoryAsync_UsesRelativePathsForDuplicateFilenames()
+    {
+        string root = CreateRoot();
+        try
+        {
+            WritePng(Path.Combine(root, "desktop", "step-1.png"), singleColor: false);
+            WritePng(Path.Combine(root, "mobile", "step-1.png"), singleColor: false);
+
+            ValidatedImageSet result = await new EvidenceImageSetValidator().ValidateDirectoryAsync(
+                root,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(["desktop-step-1", "mobile-step-1"], result.Images.Select(image => image.Key));
+            Assert.Equal(["desktop / step 1", "mobile / step 1"], result.Images.Select(image => image.Label));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     private static string CreateRoot()
     {
         string root = Path.Combine(Path.GetTempPath(), "visual-evidence-image-tests", Guid.NewGuid().ToString("N"));
@@ -57,6 +79,7 @@ public sealed class EvidenceImageSetValidatorTests
 
     private static void WritePng(string path, bool singleColor)
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         using var bitmap = new SKBitmap(8, 8);
         bitmap.Erase(SKColors.White);
         if (!singleColor)

@@ -1,5 +1,5 @@
 name: Visual Evidence
-description: Publish durable, exact-revision before/after screenshots to a GitHub pull request without a browser or file picker.
+description: Publish durable, exact-revision images or before/after screenshots to a GitHub pull request without a browser or file picker.
 author: Wool Data Inc.
 branding:
   icon: image

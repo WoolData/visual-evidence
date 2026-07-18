@@ -7,10 +7,12 @@ namespace WoolData.VisualEvidence;
 public sealed partial class EvidenceImageSetValidator
 {
     private readonly EvidenceValidationOptions _options;
+    private readonly string? _imageRoot;
 
-    public EvidenceImageSetValidator(EvidenceValidationOptions? options = null)
+    public EvidenceImageSetValidator(EvidenceValidationOptions? options = null, string? imageRoot = null)
     {
         _options = options ?? new EvidenceValidationOptions();
+        _imageRoot = imageRoot is null ? null : Path.GetFullPath(imageRoot);
     }
 
     public Task<ValidatedImageSet> ValidateAsync(
@@ -30,13 +32,14 @@ public sealed partial class EvidenceImageSetValidator
         foreach (string path in paths)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            string key = CreateKey(path);
+            string keySource = _imageRoot is null ? Path.GetFileName(path) : RelativePath(path);
+            string key = CreateKey(keySource);
             if (!keys.Add(key))
             {
                 throw new EvidenceValidationException(
                     $"Image paths produce duplicate key '{key}'. Rename one of the files.");
             }
-            images.Add(PngImageValidator.Validate(path, key, CreateLabel(path), _options));
+            images.Add(PngImageValidator.Validate(path, key, CreateLabel(keySource), _options));
         }
 
         return Task.FromResult(new ValidatedImageSet(images));
@@ -57,12 +60,22 @@ public sealed partial class EvidenceImageSetValidator
             AttributesToSkip = FileAttributes.ReparsePoint,
             MatchCasing = MatchCasing.CaseInsensitive,
         });
-        return ValidateAsync(files, cancellationToken);
+        return new EvidenceImageSetValidator(_options, root).ValidateAsync(files, cancellationToken);
+    }
+
+    private string RelativePath(string path)
+    {
+        string relative = Path.GetRelativePath(_imageRoot!, path);
+        if (relative == ".." || relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new EvidenceValidationException($"Image escapes the configured image directory: {path}");
+        }
+        return relative;
     }
 
     private static string CreateKey(string path)
     {
-        string key = InvalidKeyCharacterRegex().Replace(Path.GetFileNameWithoutExtension(path), "-")
+        string key = InvalidKeyCharacterRegex().Replace(Path.ChangeExtension(path, null)!, "-")
             .Trim('-')
             .ToLowerInvariant();
         return key.Length switch
@@ -74,7 +87,11 @@ public sealed partial class EvidenceImageSetValidator
     }
 
     private static string CreateLabel(string path) =>
-        Path.GetFileNameWithoutExtension(path).Replace('-', ' ').Replace('_', ' ');
+        Path.ChangeExtension(path, null)!
+            .Replace('\\', '/')
+            .Replace("/", " / ", StringComparison.Ordinal)
+            .Replace('-', ' ')
+            .Replace('_', ' ');
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
