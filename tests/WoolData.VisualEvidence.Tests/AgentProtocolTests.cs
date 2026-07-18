@@ -343,6 +343,19 @@ public sealed class AgentProtocolTests
     }
 
     [Fact]
+    public void Review_ExplicitDefaultEndpointDoesNotRequireCustomEgressAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "https://api.x.ai/v1",
+        ]);
+
+        Uri actual = ProgramMain.ResolveAiBaseUri(options, profile, noAuth: false);
+
+        Assert.Equal(new Uri(profile.BaseUrl), actual);
+    }
+
+    [Fact]
     public void Review_CustomCredentialedEndpointIsAcceptedAfterExplicitAcknowledgment()
     {
         AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");

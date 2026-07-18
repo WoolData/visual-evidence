@@ -573,7 +573,7 @@ internal static class ProgramMain
             ? ValidateAiBaseUri(parsed)
             : throw new ArgumentException("--ai-base-url must be an absolute URL.");
         Uri defaultUri = ValidateAiBaseUri(new Uri(profile.BaseUrl, UriKind.Absolute));
-        bool changesDestination = overrideValue is not null && uri != defaultUri;
+        bool changesDestination = overrideValue is not null && !uri.Equals(defaultUri);
         bool explicitLoopbackNoAuth = noAuth && uri.IsLoopback;
         if (changesDestination &&
             !explicitLoopbackNoAuth &&
