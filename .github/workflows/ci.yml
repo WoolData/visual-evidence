@@ -66,6 +66,9 @@ jobs:
           - os: macos-latest
             rid: osx-arm64
             executable: visual-evidence
+          - os: macos-15-intel
+            rid: osx-x64
+            executable: visual-evidence
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -89,4 +92,18 @@ jobs:
           $validation = & $tool validate --image artifacts/native-smoke.png --json | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or -not $validation.ok -or $validation.captures -ne 1) {
             throw "NativeAOT PNG validation smoke test failed."
+          }
+      - name: Run packaged Action bootstrap smoke test
+        shell: pwsh
+        env:
+          VISUAL_EVIDENCE_USE_SOURCE: "false"
+        run: |
+          $archive = "visual-evidence-v0.2.0-${{ matrix.rid }}.zip"
+          New-Item -ItemType Directory -Path artifacts/distribution -Force | Out-Null
+          Compress-Archive -Path artifacts/native/* -DestinationPath "artifacts/distribution/$archive"
+          $hash = (Get-FileHash "artifacts/distribution/$archive" -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content "artifacts/distribution/$archive.sha256" "$hash  $archive" -NoNewline
+          $description = & ./scripts/Invoke-VisualEvidenceTool.ps1 -DistributionRoot artifacts/distribution describe --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $description.protocolVersion -ne 1) {
+            throw "Packaged Action bootstrap smoke test failed."
           }

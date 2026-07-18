@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build without publishing a GitHub release.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: native release (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            executable: visual-evidence.exe
+          - os: ubuntu-latest
+            rid: linux-x64
+            executable: visual-evidence
+          - os: macos-latest
+            rid: osx-arm64
+            executable: visual-evidence
+          - os: macos-15-intel
+            rid: osx-x64
+            executable: visual-evidence
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Resolve and validate version
+        id: version
+        shell: pwsh
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { $env:DISPATCH_VERSION.TrimStart('v') }
+          $project = [xml](Get-Content src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj -Raw)
+          $projectVersion = [string]$project.Project.PropertyGroup.Version
+          $manifest = Get-Content tool-manifest.json -Raw | ConvertFrom-Json
+          if ($version -notmatch '^\d+\.\d+\.\d+$' -or $projectVersion -ne $version -or $manifest.version -ne $version) {
+            throw "Tag/input, project, and tool manifest versions must match. Requested=$version Project=$projectVersion Manifest=$($manifest.version)"
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+      - name: Publish NativeAOT executable
+        shell: pwsh
+        run: >-
+          dotnet publish src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj
+          --configuration Release --runtime ${{ matrix.rid }} --self-contained true
+          -p:PublishAot=true -p:PublishTrimmed=true -p:DebugType=None -p:DebugSymbols=false
+          --output artifacts/native
+      - name: Smoke test native executable
+        shell: pwsh
+        run: |
+          $tool = Join-Path artifacts/native "${{ matrix.executable }}"
+          $description = & $tool describe --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $description.version -notlike "${{ steps.version.outputs.value }}*") {
+            throw "Native release smoke test failed."
+          }
+      - name: Package and checksum
+        id: package
+        shell: pwsh
+        run: |
+          $archive = "visual-evidence-v${{ steps.version.outputs.value }}-${{ matrix.rid }}.zip"
+          Compress-Archive -Path artifacts/native/* -DestinationPath "artifacts/$archive"
+          $hash = (Get-FileHash "artifacts/$archive" -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content "artifacts/$archive.sha256" "$hash  $archive" -NoNewline
+          "archive=artifacts/$archive" >> $env:GITHUB_OUTPUT
+          "checksum=artifacts/$archive.sha256" >> $env:GITHUB_OUTPUT
+      - name: Attest native archive
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ steps.package.outputs.archive }}
+      - name: Upload native release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-${{ matrix.rid }}
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.checksum }}
+          if-no-files-found: error
+
+  package:
+    name: tool package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet pack src/WoolData.VisualEvidence.Cli/WoolData.VisualEvidence.Cli.csproj --configuration Release --output artifacts/package
+      - name: Add checksum
+        id: package
+        shell: pwsh
+        run: |
+          $packages = @(Get-ChildItem artifacts/package/*.nupkg -File | Where-Object Name -NotLike '*.snupkg')
+          if ($packages.Count -ne 1) { throw "Expected one tool package; found $($packages.Count)." }
+          $package = $packages[0]
+          $hash = (Get-FileHash $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content "$($package.FullName).sha256" "$hash  $($package.Name)" -NoNewline
+          "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
+      - name: Attest tool package
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: ${{ steps.package.outputs.path }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: tool-package
+          path: artifacts/package/*
+          if-no-files-found: error
+
+  publish:
+    name: publish GitHub release
+    if: github.ref_type == 'tag'
+    needs: [native, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts/release
+          merge-multiple: true
+      - name: Publish immutable release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "${{ github.ref_name }}" artifacts/release/*
+          --repo "${{ github.repository }}"
+          --verify-tag --generate-notes --title "${{ github.ref_name }}"

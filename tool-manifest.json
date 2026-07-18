@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "version": "0.2.0",
+  "repository": "WoolData/visual-evidence",
+  "artifacts": {
+    "win-x64": {
+      "archive": "visual-evidence-v0.2.0-win-x64.zip",
+      "executable": "visual-evidence.exe"
+    },
+    "linux-x64": {
+      "archive": "visual-evidence-v0.2.0-linux-x64.zip",
+      "executable": "visual-evidence"
+    },
+    "osx-arm64": {
+      "archive": "visual-evidence-v0.2.0-osx-arm64.zip",
+      "executable": "visual-evidence"
+    },
+    "osx-x64": {
+      "archive": "visual-evidence-v0.2.0-osx-x64.zip",
+      "executable": "visual-evidence"
+    }
+  }
+}
