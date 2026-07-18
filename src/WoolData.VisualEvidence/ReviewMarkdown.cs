@@ -17,6 +17,10 @@ public static class ReviewMarkdown
         AiReviewDocument? aiReview = null)
     {
         GitHubAssetUrl.ValidateRepository(repository);
+        if (aiReview is not null)
+        {
+            AiReviewDocumentCodec.Validate(aiReview);
+        }
 
         var markdown = new StringBuilder();
         markdown.AppendLine(Marker);
