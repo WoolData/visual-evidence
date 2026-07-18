@@ -132,7 +132,8 @@ public sealed class ReviewMarkdownTests
         Assert.DoesNotContain("Minor color difference", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("@reviewers", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("https://evil.example", markdown, StringComparison.Ordinal);
-        Assert.Contains("hxxps://evil.example", markdown, StringComparison.Ordinal);
+        Assert.Contains("hxxps[:]//evil.example", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("hxxps://evil.example", markdown, StringComparison.Ordinal);
         Assert.Contains("&#96;&#64;reviewers", markdown, StringComparison.Ordinal);
     }
 
