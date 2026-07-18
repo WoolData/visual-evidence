@@ -90,3 +90,16 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or -not $validation.ok -or $validation.captures -ne 1) {
             throw "NativeAOT PNG validation smoke test failed."
           }
+      - name: Run packaged Action bootstrap smoke test
+        shell: pwsh
+        env:
+          VISUAL_EVIDENCE_USE_SOURCE: "false"
+        run: |
+          $toolRoot = Join-Path $env:RUNNER_TEMP "wooldata-visual-evidence/0.2.0-${{ matrix.rid }}/tool"
+          New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+          Copy-Item artifacts/native/* $toolRoot -Force
+          Set-Content (Join-Path (Split-Path $toolRoot) "attestation-verified") "ci-smoke" -NoNewline
+          $description = & ./scripts/Invoke-VisualEvidenceTool.ps1 describe --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $description.protocolVersion -ne 1) {
+            throw "Packaged Action bootstrap smoke test failed."
+          }
