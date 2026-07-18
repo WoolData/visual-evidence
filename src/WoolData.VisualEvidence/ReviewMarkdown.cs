@@ -189,7 +189,7 @@ public static class ReviewMarkdown
     private static string EscapeAi(string value) => Escape(value)
         .Replace("https://", "hxxps://", StringComparison.OrdinalIgnoreCase)
         .Replace("http://", "hxxp://", StringComparison.OrdinalIgnoreCase)
-        .Replace("://", "[:]//", StringComparison.Ordinal)
+        .Replace("://", "&#58;//", StringComparison.Ordinal)
         .Replace("www.", "www[.]", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeSingleLine(string value) => string.Join(
