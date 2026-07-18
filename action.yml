@@ -99,15 +99,22 @@ runs:
           @($env:VISUAL_EVIDENCE_IMAGES -split "`r?`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { "--image"; $_ })
         }
 
-        $result = & (Join-Path $env:GITHUB_ACTION_PATH "scripts/Invoke-VisualEvidenceTool.ps1") `
-          publish `
-          --repository $env:VISUAL_EVIDENCE_REPOSITORY `
-          --change-number $env:VISUAL_EVIDENCE_PR `
-          @inputArgs `
-          --summary $env:VISUAL_EVIDENCE_SUMMARY `
-          --assets-branch $env:VISUAL_EVIDENCE_ASSETS_BRANCH `
-          @commentAuthorArgs `
-          --publish-status $env:VISUAL_EVIDENCE_PUBLISH_STATUS
+        $toolArgs = @(
+          "publish"
+          "--repository"; $env:VISUAL_EVIDENCE_REPOSITORY
+          "--change-number"; $env:VISUAL_EVIDENCE_PR
+        ) + $inputArgs + @(
+          "--summary"; $env:VISUAL_EVIDENCE_SUMMARY
+          "--assets-branch"; $env:VISUAL_EVIDENCE_ASSETS_BRANCH
+        ) + $commentAuthorArgs + @(
+          "--publish-status"; $env:VISUAL_EVIDENCE_PUBLISH_STATUS
+        )
+        $emptyArgument = $toolArgs | Where-Object { [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
+        if ($null -ne $emptyArgument) {
+          throw "Visual Evidence constructed an empty tool argument."
+        }
+
+        $result = & (Join-Path $env:GITHUB_ACTION_PATH "scripts/Invoke-VisualEvidenceTool.ps1") @toolArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         $published = $result | ConvertFrom-Json
         "asset-commit=$($published.assetCommit)" >> $env:GITHUB_OUTPUT
