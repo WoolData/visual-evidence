@@ -25,12 +25,11 @@ internal static class PngImageValidator
         {
             throw new EvidenceValidationException($"Capture '{key}' cannot be a symbolic link or reparse point.");
         }
-        for (DirectoryInfo? ancestor = file.Directory; ancestor?.Parent is not null; ancestor = ancestor.Parent)
+        DirectoryInfo? parent = file.Directory;
+        if (parent is not null &&
+            (parent.LinkTarget is not null || parent.Attributes.HasFlag(FileAttributes.ReparsePoint)))
         {
-            if (ancestor.LinkTarget is not null || ancestor.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            {
-                throw new EvidenceValidationException($"Capture '{key}' cannot traverse a symbolic link or reparse point.");
-            }
+            throw new EvidenceValidationException($"Capture '{key}' cannot traverse a symbolic link or reparse point.");
         }
         if (!string.Equals(file.Extension, ".png", StringComparison.OrdinalIgnoreCase))
         {
