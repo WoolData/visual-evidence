@@ -2,8 +2,6 @@
 
 [CmdletBinding()]
 param(
-    [string] $DistributionRoot,
-
     [Parameter(ValueFromRemainingArguments)]
     [string[]] $ToolArguments
 )
@@ -55,7 +53,8 @@ $executable = Join-Path $toolRoot $artifact.executable
 New-Item -ItemType Directory -Path $versionRoot -Force | Out-Null
 $archivePath = Join-Path $versionRoot $artifact.archive
 $checksumPath = "$archivePath.sha256"
-if ([string]::IsNullOrWhiteSpace($DistributionRoot)) {
+$distributionRoot = $env:VISUAL_EVIDENCE_DISTRIBUTION_ROOT
+if ([string]::IsNullOrWhiteSpace($distributionRoot)) {
     $releaseRoot = "https://github.com/$($manifest.repository)/releases/download/v$($manifest.version)"
     Invoke-WebRequest -Uri "$releaseRoot/$($artifact.archive)" -OutFile $archivePath
     Invoke-WebRequest -Uri "$releaseRoot/$($artifact.archive).sha256" -OutFile $checksumPath
@@ -67,7 +66,7 @@ if ([string]::IsNullOrWhiteSpace($DistributionRoot)) {
         exit $LASTEXITCODE
     }
 } else {
-    $localRoot = Resolve-Path -LiteralPath $DistributionRoot
+    $localRoot = Resolve-Path -LiteralPath $distributionRoot
     Copy-Item -LiteralPath (Join-Path $localRoot $artifact.archive) -Destination $archivePath
     Copy-Item -LiteralPath (Join-Path $localRoot "$($artifact.archive).sha256") -Destination $checksumPath
 }
