@@ -11,7 +11,7 @@
     "changeNumber": { "type": "integer", "minimum": 1 },
     "assetCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
     "captures": { "type": "integer", "minimum": 0 },
-    "task": { "enum": ["compare", "describe", "issues"] },
+    "task": { "const": "compare" },
     "provider": { "type": "string" },
     "model": { "type": "string" },
     "output": { "type": "string" },
