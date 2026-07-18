@@ -113,6 +113,7 @@ public sealed class GitHubApiClient :
     {
         ArgumentNullException.ThrowIfNull(review);
         AiReviewProvenanceValidator.ValidateComparison(review, evidence);
+        byte[] reviewBytes = AiReviewDocumentCodec.Serialize(review);
 
         var entries = new List<PendingAsset>((evidence.Captures.Count * 2) + 1);
         foreach (ValidatedImagePair pair in evidence.Captures)
@@ -126,7 +127,7 @@ public sealed class GitHubApiClient :
         }
 
         string reviewPath = $"pr-{changeNumber}/{headRevision}/ai-review-v1.json";
-        string reviewBlob = await CreateBlobAsync(AiReviewDocumentCodec.Serialize(review), cancellationToken).ConfigureAwait(false);
+        string reviewBlob = await CreateBlobAsync(reviewBytes, cancellationToken).ConfigureAwait(false);
         entries.Add(new PendingAsset("ai-review-v1", "Advisory AI review", reviewPath, reviewBlob, true));
         string commitSha = await PublishEntriesAsync(
             changeNumber,

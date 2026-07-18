@@ -179,6 +179,9 @@ public static class ReviewMarkdown
         .Replace("@", "&#64;", StringComparison.Ordinal);
 
     private static string EscapeAlt(string value) => NormalizeSingleLine(value)
+        .Replace("&", "&amp;", StringComparison.Ordinal)
+        .Replace("<", "&lt;", StringComparison.Ordinal)
+        .Replace(">", "&gt;", StringComparison.Ordinal)
         .Replace("[", string.Empty, StringComparison.Ordinal)
         .Replace("]", string.Empty, StringComparison.Ordinal)
         .Replace("(", string.Empty, StringComparison.Ordinal)

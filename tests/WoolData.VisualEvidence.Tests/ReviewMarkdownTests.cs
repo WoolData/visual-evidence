@@ -100,7 +100,7 @@ public sealed class ReviewMarkdownTests
                 AiReviewDocumentCodecTests.CreateDocument().Reviews.Single() with
                 {
                     Key = "home",
-                    AltText = "Settings screen | after save action moved",
+                    AltText = "Settings screen | after <save> &lt;script&gt; action moved",
                     Summary = "Save moved below the form. @reviewers See https://evil.example/path and ftp://files.example/path.",
                     Issues =
                     [
@@ -126,7 +126,11 @@ public sealed class ReviewMarkdownTests
         Assert.Contains("## Advisory AI visual review", markdown, StringComparison.Ordinal);
         Assert.Contains("Machine-generated observations only", markdown, StringComparison.Ordinal);
         Assert.Contains($"blob/{assetCommit}/pr-7/{head}/ai-review-v1.json?raw=true", markdown, StringComparison.Ordinal);
-        Assert.Contains("Settings screen \\| after save action moved", markdown, StringComparison.Ordinal);
+        Assert.Contains(
+            "Settings screen \\| after &lt;save&gt; &amp;lt;script&amp;gt; action moved",
+            markdown,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("<save>", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("| ![Settings screen |", markdown, StringComparison.Ordinal);
         Assert.Contains("**MEDIUM** footer:", markdown, StringComparison.Ordinal);
         Assert.DoesNotContain("Minor color difference", markdown, StringComparison.Ordinal);

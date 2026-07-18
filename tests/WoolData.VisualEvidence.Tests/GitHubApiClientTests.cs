@@ -132,6 +132,27 @@ public sealed class GitHubApiClientTests
     }
 
     [Fact]
+    public async Task PublishWithAiReviewAsync_RejectsOversizedReviewBeforeGitHubCalls()
+    {
+        var handler = new RecordingHandler(request =>
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}"));
+        using var client = CreateClient(handler);
+        ValidatedEvidencePair evidence = CreateValidatedEvidence(captureCount: 3);
+        AiReviewDocument review = CreateOversizedAiReview(evidence);
+
+        EvidenceValidationException error = await Assert.ThrowsAsync<EvidenceValidationException>(() =>
+            client.PublishWithAiReviewAsync(
+                17,
+                new string('2', 40),
+                evidence,
+                review,
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("262144-byte", error.Message, StringComparison.Ordinal);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
     public async Task PublishWithAiReviewAsync_ReusesExistingCommitForIdenticalEvidence()
     {
         int blob = 0;
@@ -356,7 +377,7 @@ public sealed class GitHubApiClientTests
         }, httpClient);
     }
 
-    private static ValidatedEvidencePair CreateValidatedEvidence()
+    private static ValidatedEvidencePair CreateValidatedEvidence(int captureCount = 1)
     {
         CaptureEnvironment environment = EvidenceFixture.CreateEnvironment("fonts");
         EvidenceManifest Manifest(string snapshot, char revision) => new()
@@ -367,12 +388,19 @@ public sealed class GitHubApiClientTests
             Environment = environment,
             Captures = Array.Empty<EvidenceCapture>(),
         };
-        var before = new ValidatedImage("home", "Home", "before.png", 2, 2, new string('a', 64), new byte[] { 1, 2 });
-        var after = new ValidatedImage("home", "Home", "after.png", 2, 2, new string('b', 64), new byte[] { 3, 4 });
+        ValidatedImagePair[] captures = Enumerable.Range(0, captureCount)
+            .Select(index =>
+            {
+                string key = captureCount == 1 ? "home" : $"home-{index}";
+                var before = new ValidatedImage(key, "Home", "before.png", 2, 2, new string('a', 64), new byte[] { 1, 2 });
+                var after = new ValidatedImage(key, "Home", "after.png", 2, 2, new string('b', 64), new byte[] { 3, 4 });
+                return new ValidatedImagePair(key, "Home", before, after);
+            })
+            .ToArray();
         return new ValidatedEvidencePair(
             Manifest("before", '1'),
             Manifest("after", '2'),
-            new[] { new ValidatedImagePair("home", "Home", before, after) });
+            captures);
     }
 
     private static AiReviewDocument CreateAiReview(ValidatedEvidencePair evidence)
@@ -392,6 +420,31 @@ public sealed class GitHubApiClientTests
                     },
                 },
             ],
+        };
+    }
+
+    private static AiReviewDocument CreateOversizedAiReview(ValidatedEvidencePair evidence)
+    {
+        AiReviewEntry template = AiReviewDocumentCodecTests.CreateDocument().Reviews.Single();
+        string longText = new('x', 1000);
+        return AiReviewDocumentCodecTests.CreateDocument() with
+        {
+            Reviews = evidence.Captures.Select(pair => template with
+            {
+                Key = pair.Key,
+                Source = new AiReviewSource
+                {
+                    BeforeSha256 = pair.Before.SourceSha256,
+                    AfterSha256 = pair.After.SourceSha256,
+                },
+                Differences = Enumerable.Repeat(longText, 50).ToArray(),
+                Issues = Enumerable.Range(0, 50).Select(_ => new AiReviewIssue
+                {
+                    Severity = "low",
+                    Area = "layout",
+                    Description = longText,
+                }).ToArray(),
+            }).ToArray(),
         };
     }
 
