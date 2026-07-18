@@ -166,6 +166,28 @@ public sealed class AiImageReviewProviderTests
     }
 
     [Fact]
+    public async Task Provider_RetriesIncompleteStructuredOutputOnceThenFails()
+    {
+        int requests = 0;
+        var handler = new StubHandler(_ =>
+        {
+            requests++;
+            return Task.FromResult(JsonResponse(OpenAiEnvelope(
+                "{\"reviews\":[{\"altText\":\"After screen\",\"differences\":[],\"issues\":[]}]}")));
+        });
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://openai.test/v1/") };
+        using var provider = new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions { ApiKey = "secret", Model = "vision-test" },
+            client);
+
+        AiReviewProviderException error = await Assert.ThrowsAsync<AiReviewProviderException>(
+            () => provider.ReviewAsync(Request("screen"), TestContext.Current.CancellationToken));
+
+        Assert.Equal(2, requests);
+        Assert.Contains("twice", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Provider_RejectsPromptHashMismatchBeforeNetworkCall()
     {
         int requests = 0;

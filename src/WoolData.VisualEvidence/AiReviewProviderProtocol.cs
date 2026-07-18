@@ -235,6 +235,12 @@ internal static class AiReviewProviderProtocol
                 throw new EvidenceValidationException("AI provider must return exactly one review entry per capture pair.");
             }
             AiReviewContentEntry entry = content.Reviews[0];
+            if (entry.AltText is null || entry.Summary is null ||
+                entry.Differences is null || entry.Issues is null)
+            {
+                throw new EvidenceValidationException(
+                    "AI provider review entry must include altText, summary, differences, and issues.");
+            }
             var result = new AiReviewEntry
             {
                 Key = pair.Key,

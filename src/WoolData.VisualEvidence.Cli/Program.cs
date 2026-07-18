@@ -340,7 +340,7 @@ internal static class ProgramMain
                 {
                     ["publish"] = new(["evidence-root", "image-root", "image"], ["summary", "change-number", "GITHUB_TOKEN"], DescribeOptions("publish")),
                     ["validate"] = new(["evidence-root", "image-root", "image"], Options: DescribeOptions("validate")),
-                    ["review"] = new(["compare"], ["evidence-root", "output", "ai-model"], DescribeOptions("review"), "Produce optional advisory ai-review-v1 JSON from validated evidence."),
+                    ["review"] = new(["evidence-root"], ["evidence-root", "output", "ai-model"], DescribeOptions("review"), "Produce optional advisory ai-review-v1 JSON from validated evidence."),
                     ["verify"] = new(Requires: ["change-number", "GITHUB_TOKEN"], Options: DescribeOptions("verify")),
                     ["doctor"] = new(Requires: ["change-number", "GITHUB_TOKEN"], Options: DescribeOptions("doctor")),
                     ["manifest"] = new(Options: DescribeOptions("manifest"), Purpose: "Build a structured before/after manifest."),

@@ -32,6 +32,11 @@ public sealed class AgentProtocolTests
             Assert.True(environmentVariables.TryGetProperty("XAI_API_KEY", out _));
             Assert.True(environmentVariables.TryGetProperty("GEMINI_API_KEY", out _));
             Assert.Equal(4, document.RootElement.GetProperty("workflow").GetArrayLength());
+            JsonElement reviewModes = document.RootElement
+                .GetProperty("commands")
+                .GetProperty("review")
+                .GetProperty("modes");
+            Assert.Equal("evidence-root", Assert.Single(reviewModes.EnumerateArray()).GetString());
             JsonElement.ArrayEnumerator publishOptions = document.RootElement
                 .GetProperty("commands")
                 .GetProperty("publish")
