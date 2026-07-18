@@ -542,7 +542,7 @@ internal static class ProgramMain
             throw new ArgumentException(
                 configured.Length > 1
                     ? $"Multiple AI provider credentials are set ({string.Join(", ", configured)}); specify --ai-provider to choose the screenshot egress destination."
-                    : "No AI provider credential was found; set ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY, or GEMINI_API_KEY, or specify --ai-provider openai-compatible --ai-no-auth true for a loopback provider.");
+                    : "No AI provider credential was found; set ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY, or GEMINI_API_KEY, or specify --ai-provider openai-compatible --ai-base-url http://127.0.0.1:PORT/v1/ --ai-no-auth true for a loopback provider.");
         }
         return configured[0];
     }

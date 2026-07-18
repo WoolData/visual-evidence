@@ -278,6 +278,36 @@ public sealed class AgentProtocolTests
         }
     }
 
+    [Fact]
+    public void Review_NoCredentialGuidanceIncludesLoopbackBaseUrl()
+    {
+        string[] variables = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY"];
+        Dictionary<string, string?> originals = variables.ToDictionary(
+            static variable => variable,
+            static variable => Environment.GetEnvironmentVariable(variable),
+            StringComparer.Ordinal);
+        try
+        {
+            foreach (string variable in variables)
+            {
+                Environment.SetEnvironmentVariable(variable, null);
+            }
+
+            ArgumentException error = Assert.Throws<ArgumentException>(
+                () => ProgramMain.ResolveAiProvider(OptionReader.Parse([])));
+
+            Assert.Contains("--ai-base-url http://127.0.0.1:PORT/v1/", error.Message, StringComparison.Ordinal);
+            Assert.Contains("--ai-no-auth true", error.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            foreach ((string variable, string? value) in originals)
+            {
+                Environment.SetEnvironmentVariable(variable, value);
+            }
+        }
+    }
+
     [Theory]
     [InlineData("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", "Anthropic", false)]
     [InlineData("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", "OpenAiCompatible", true)]

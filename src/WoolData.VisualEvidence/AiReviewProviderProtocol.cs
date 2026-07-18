@@ -236,10 +236,11 @@ internal static class AiReviewProviderProtocol
             }
             AiReviewContentEntry entry = content.Reviews[0];
             if (entry.AltText is null || entry.Summary is null ||
-                entry.Differences is null || entry.Issues is null)
+                entry.Differences is null || entry.Issues is null ||
+                entry.Issues.Any(static issue => issue is null || issue.Area is null))
             {
                 throw new EvidenceValidationException(
-                    "AI provider review entry must include altText, summary, differences, and issues.");
+                    "AI provider review entry must include altText, summary, differences, issues, and each issue area.");
             }
             var result = new AiReviewEntry
             {
