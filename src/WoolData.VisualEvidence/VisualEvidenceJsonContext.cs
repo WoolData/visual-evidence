@@ -10,6 +10,7 @@ namespace WoolData.VisualEvidence;
     WriteIndented = false)]
 [JsonSerializable(typeof(EvidenceManifest))]
 [JsonSerializable(typeof(AiReviewDocument))]
+[JsonSerializable(typeof(AiReviewProviderProtocol.AiReviewContentDocument))]
 [JsonSerializable(typeof(GitHubCommentPayload))]
 [JsonSerializable(typeof(GitHubStatusPayload))]
 [JsonSerializable(typeof(GitHubBlobPayload))]

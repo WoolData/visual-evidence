@@ -27,10 +27,16 @@ public sealed class AgentProtocolTests
             Assert.True(document.RootElement.GetProperty("captureIsExternal").GetBoolean());
             Assert.Equal("GITHUB_TOKEN", document.RootElement.GetProperty("tokenEnvironmentVariable").GetString());
             Assert.True(document.RootElement.GetProperty("republishIsIdempotent").GetBoolean());
-            Assert.Equal(
-                3,
-                document.RootElement.GetProperty("environmentVariables").EnumerateObject().Count());
-            Assert.Equal(3, document.RootElement.GetProperty("workflow").GetArrayLength());
+            JsonElement environmentVariables = document.RootElement.GetProperty("environmentVariables");
+            Assert.Equal(7, environmentVariables.EnumerateObject().Count());
+            Assert.True(environmentVariables.TryGetProperty("XAI_API_KEY", out _));
+            Assert.True(environmentVariables.TryGetProperty("GEMINI_API_KEY", out _));
+            Assert.Equal(4, document.RootElement.GetProperty("workflow").GetArrayLength());
+            JsonElement reviewModes = document.RootElement
+                .GetProperty("commands")
+                .GetProperty("review")
+                .GetProperty("modes");
+            Assert.Equal("evidence-root", Assert.Single(reviewModes.EnumerateArray()).GetString());
             JsonElement.ArrayEnumerator publishOptions = document.RootElement
                 .GetProperty("commands")
                 .GetProperty("publish")
@@ -191,6 +197,190 @@ public sealed class AgentProtocolTests
         {
             Console.SetError(original);
         }
+    }
+
+    [Fact]
+    public async Task Review_RequiresExplicitProviderWhenBothDefaultKeysExist()
+    {
+        using var fixture = new EvidenceFixture();
+        string[] variables = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY"];
+        Dictionary<string, string?> originals = variables.ToDictionary(
+            static variable => variable,
+            static variable => Environment.GetEnvironmentVariable(variable),
+            StringComparer.Ordinal);
+        TextWriter originalError = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            foreach (string variable in variables)
+            {
+                Environment.SetEnvironmentVariable(variable, null);
+            }
+            Environment.SetEnvironmentVariable("XAI_API_KEY", "xai-secret");
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", "gemini-secret");
+            Console.SetError(output);
+
+            int exitCode = await ProgramMain.RunAsync([
+                "review",
+                "--evidence-root", fixture.Root,
+                "--output", Path.Combine(fixture.Root, "review.json"),
+                "--ai-model", "test-model",
+                "--json",
+            ]);
+
+            Assert.Equal(2, exitCode);
+            using JsonDocument document = JsonDocument.Parse(output.ToString());
+            Assert.Contains(
+                "specify --ai-provider",
+                document.RootElement.GetProperty("error").GetProperty("message").GetString(),
+                StringComparison.Ordinal);
+            Assert.Contains("grok", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Contains("gemini", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(originalError);
+            foreach ((string variable, string? value) in originals)
+            {
+                Environment.SetEnvironmentVariable(variable, value);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("ANTHROPIC_API_KEY", "anthropic")]
+    [InlineData("OPENAI_API_KEY", "openai-compatible")]
+    [InlineData("XAI_API_KEY", "grok")]
+    [InlineData("GEMINI_API_KEY", "gemini")]
+    public void Review_InfersExactlyOneConfiguredProvider(string configuredVariable, string expectedProvider)
+    {
+        string[] variables = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY"];
+        Dictionary<string, string?> originals = variables.ToDictionary(
+            static variable => variable,
+            static variable => Environment.GetEnvironmentVariable(variable),
+            StringComparer.Ordinal);
+        try
+        {
+            foreach (string variable in variables)
+            {
+                Environment.SetEnvironmentVariable(variable, null);
+            }
+            Environment.SetEnvironmentVariable(configuredVariable, "test-secret");
+
+            Assert.Equal(expectedProvider, ProgramMain.ResolveAiProvider(OptionReader.Parse([])));
+        }
+        finally
+        {
+            foreach ((string variable, string? value) in originals)
+            {
+                Environment.SetEnvironmentVariable(variable, value);
+            }
+        }
+    }
+
+    [Fact]
+    public void Review_NoCredentialGuidanceIncludesLoopbackBaseUrl()
+    {
+        string[] variables = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY"];
+        Dictionary<string, string?> originals = variables.ToDictionary(
+            static variable => variable,
+            static variable => Environment.GetEnvironmentVariable(variable),
+            StringComparer.Ordinal);
+        try
+        {
+            foreach (string variable in variables)
+            {
+                Environment.SetEnvironmentVariable(variable, null);
+            }
+
+            ArgumentException error = Assert.Throws<ArgumentException>(
+                () => ProgramMain.ResolveAiProvider(OptionReader.Parse([])));
+
+            Assert.Contains("--ai-base-url http://127.0.0.1:PORT/v1/", error.Message, StringComparison.Ordinal);
+            Assert.Contains("--ai-no-auth true", error.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            foreach ((string variable, string? value) in originals)
+            {
+                Environment.SetEnvironmentVariable(variable, value);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", "Anthropic", false)]
+    [InlineData("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", "OpenAiCompatible", true)]
+    [InlineData("grok", "XAI_API_KEY", "https://api.x.ai/v1/", "XaiResponses", false)]
+    [InlineData("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", "OpenAiCompatible", false)]
+    public void Review_ProviderProfilesPinCredentialEndpointAndProtocol(
+        string name,
+        string keyVariable,
+        string baseUrl,
+        string protocol,
+        bool allowsNoAuth)
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile(name);
+
+        Assert.Equal(keyVariable, profile.KeyEnvironmentVariable);
+        Assert.Equal(baseUrl, profile.BaseUrl);
+        Assert.Equal(protocol, profile.Protocol.ToString());
+        Assert.Equal(allowsNoAuth, profile.AllowsNoAuth);
+    }
+
+    [Fact]
+    public void Review_CustomCredentialedEndpointRequiresExplicitEgressAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "https://gateway.example/v1/",
+        ]);
+
+        ArgumentException error = Assert.Throws<ArgumentException>(
+            () => ProgramMain.ResolveAiBaseUri(options, profile, noAuth: false));
+
+        Assert.Contains("--ai-allow-custom-egress true", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Review_ExplicitDefaultEndpointDoesNotRequireCustomEgressAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "https://api.x.ai/v1",
+        ]);
+
+        Uri actual = ProgramMain.ResolveAiBaseUri(options, profile, noAuth: false);
+
+        Assert.Equal(new Uri(profile.BaseUrl), actual);
+    }
+
+    [Fact]
+    public void Review_CustomCredentialedEndpointIsAcceptedAfterExplicitAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("grok");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "https://gateway.example/v1/",
+            "--ai-allow-custom-egress", "true",
+        ]);
+
+        Uri actual = ProgramMain.ResolveAiBaseUri(options, profile, noAuth: false);
+
+        Assert.Equal("https://gateway.example/v1/", actual.AbsoluteUri);
+    }
+
+    [Fact]
+    public void Review_ExplicitLoopbackNoAuthEndpointDoesNotNeedCustomEgressAcknowledgment()
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile("openai-compatible");
+        OptionReader options = OptionReader.Parse([
+            "--ai-base-url", "http://127.0.0.1:11434/v1/",
+        ]);
+
+        Uri actual = ProgramMain.ResolveAiBaseUri(options, profile, noAuth: true);
+
+        Assert.True(actual.IsLoopback);
+        Assert.Equal("http", actual.Scheme);
     }
 
     [Fact]

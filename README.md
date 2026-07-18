@@ -147,6 +147,50 @@ dotnet run --project src/WoolData.VisualEvidence.Cli -- verify `
 
 Tokens are read only from the named environment variable and are never accepted as command-line values.
 
+### Optional advisory AI review
+
+`review` is an optional stage between validation and publication. It compares
+each validated before/after pair in one multimodal request and writes strict,
+source-hash-bound `ai-review-v1` JSON. It never changes the full-resolution
+evidence, and its output is advisory rather than a merge decision.
+
+```powershell
+$env:GEMINI_API_KEY = "..." # or ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY
+visual-evidence review `
+  --evidence-root ./evidence `
+  --output ./ai-review-v1.json `
+  --ai-provider gemini `
+  --ai-model MODEL_ID `
+  --json
+```
+
+If exactly one default provider key is set, the CLI infers that provider. If
+more than one is set, `--ai-provider anthropic|openai-compatible|grok|gemini`
+is required because the choice controls where screenshots leave the machine.
+Grok uses `XAI_API_KEY` and xAI's current Responses API; Gemini uses
+`GEMINI_API_KEY` and Google's official OpenAI-compatible endpoint. Choose a
+model that supports image inputs and structured outputs; the CLI deliberately
+does not carry a moving model default. Credentials are read only from
+environment variables. An explicitly selected OpenAI-compatible loopback
+server may use `--ai-no-auth true`; plaintext HTTP is refused for non-loopback
+hosts. A credentialed `--ai-base-url` override also requires
+`--ai-allow-custom-egress true`, making the new screenshot-and-key destination
+an explicit operator decision. Use `--prompt-file` to override the
+injection-resistant default prompt.
+The effective prompt hash, provider, model, transport edge, and validated
+source-image hashes are recorded in the output.
+
+Protocol references: [Claude structured outputs](https://platform.claude.com/docs/en/build-with-claude/structured-outputs),
+[xAI image understanding](https://docs.x.ai/developers/model-capabilities/images/understanding),
+[xAI structured outputs](https://docs.x.ai/developers/model-capabilities/text/structured-outputs),
+[Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), and
+[Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output).
+
+Direct API providers are the unattended CI path. Optional adapters for existing
+Codex CLI and Claude Code subscription logins are tracked separately in
+[#41](https://github.com/WoolData/visual-evidence/issues/41); Visual Evidence
+will not copy or manage those CLIs' OAuth credentials.
+
 ## Manifest Contract
 
 Each snapshot manifest contains:

@@ -79,6 +79,17 @@ public sealed class SchemaContractTests
         Assert.Matches(new Regex(pattern, RegexOptions.CultureInvariant), "captures/Home.PNG");
     }
 
+    [Fact]
+    public void AgentProtocolAdvertisesOnlyImplementedReviewTask()
+    {
+        string schemaPath = Path.Combine(FindRepositoryRoot(), "schema", "agent-protocol-v1.json");
+        using JsonDocument schema = JsonDocument.Parse(File.ReadAllText(schemaPath));
+
+        Assert.Equal(
+            "compare",
+            schema.RootElement.GetProperty("properties").GetProperty("task").GetProperty("const").GetString());
+    }
+
     private static IEnumerable<string> FindPatterns(JsonElement element)
     {
         if (element.ValueKind == JsonValueKind.Object)
