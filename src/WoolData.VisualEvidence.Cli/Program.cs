@@ -221,14 +221,28 @@ internal static class ProgramMain
                 1,
                 "Publish existing PNG images as durable, exact-revision pull-request evidence.",
                 true,
+                "GITHUB_TOKEN",
+                true,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["GITHUB_TOKEN"] = "Required for doctor, publish, and verify; never pass tokens as arguments.",
+                    ["GITHUB_REPOSITORY"] = "Optional OWNER/REPO default for --repository.",
+                    ["GITHUB_API_URL"] = "Optional API endpoint default for --api-url.",
+                },
                 new Dictionary<string, AgentCommandDescription>(StringComparer.Ordinal)
                 {
-                    ["publish"] = new(["evidence-root", "image-root", "image"], ["summary", "change-number", "repository", "GITHUB_TOKEN"]),
-                    ["validate"] = new(["evidence-root", "image-root", "image"]),
-                    ["verify"] = new(Requires: ["change-number", "repository", "GITHUB_TOKEN"]),
-                    ["doctor"] = new(Requires: ["change-number", "repository", "GITHUB_TOKEN"]),
-                    ["manifest"] = new(Purpose: "Build a structured before/after manifest."),
+                    ["publish"] = new(["evidence-root", "image-root", "image"], ["summary", "change-number", "GITHUB_TOKEN"], DescribeOptions("publish")),
+                    ["validate"] = new(["evidence-root", "image-root", "image"], Options: DescribeOptions("validate")),
+                    ["verify"] = new(Requires: ["change-number", "GITHUB_TOKEN"], Options: DescribeOptions("verify")),
+                    ["doctor"] = new(Requires: ["change-number", "GITHUB_TOKEN"], Options: DescribeOptions("doctor")),
+                    ["manifest"] = new(Options: DescribeOptions("manifest"), Purpose: "Build a structured before/after manifest."),
+                    ["environment-key"] = new(Options: DescribeOptions("environment-key"), Purpose: "Calculate a capture-environment compatibility key."),
                 },
+                [
+                    "visual-evidence doctor --repository OWNER/REPO --change-number N --json",
+                    "visual-evidence publish --repository OWNER/REPO --change-number N --image PATH --summary TEXT --json",
+                    "visual-evidence verify --repository OWNER/REPO --change-number N --json",
+                ],
                 new Dictionary<string, int>(StringComparer.Ordinal)
                 {
                     ["success"] = 0,
@@ -300,11 +314,16 @@ internal static class ProgramMain
 
     private static void EnsureAllowedOptions(string command, OptionReader options)
     {
+        options.EnsureOnly(command, AllowedOptions(command));
+    }
+
+    private static string[] AllowedOptions(string command)
+    {
         string[] commonValidation = ["maximum-image-bytes", "maximum-pixels", "maximum-captures", "allow-single-color", "json"];
         string[] environment = ["os", "architecture", "runner-image", "capture-adapter", "adapter-version", "renderer", "render-scale", "font-set-hash"];
         string[] github = ["repository", "change-number", "assets-branch", "comment-author-login", "token-environment-variable", "api-url", "json"];
 
-        string[] allowed = command switch
+        return command switch
         {
             "validate" => ["evidence-root", "expected-base", "expected-head", "image-root", "image", .. commonValidation],
             "publish" => ["evidence-root", "image-root", "image", "summary", "publish-status", .. github, .. commonValidation],
@@ -314,8 +333,13 @@ internal static class ProgramMain
             "manifest" => ["snapshot", "revision", "capture-root", "output", .. environment, .. commonValidation],
             _ => [],
         };
-        options.EnsureOnly(command, allowed);
     }
+
+    private static string[] DescribeOptions(string command) =>
+        AllowedOptions(command)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(static option => $"--{option}")
+            .ToArray();
 
     private static void WriteJson<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo) =>
         Console.WriteLine(JsonSerializer.Serialize(value, typeInfo));
