@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 
 namespace WoolData.VisualEvidence;
 
@@ -11,7 +12,7 @@ internal static class AiReviewProviderProtocol
 {
     private const int MaximumResponseBytes = 1024 * 1024;
     private const string ContentSchema = """
-        {"type":"object","additionalProperties":false,"required":["reviews"],"properties":{"reviews":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["altText","summary","differences","issues"],"properties":{"altText":{"type":"string"},"summary":{"type":"string"},"differences":{"type":"array","items":{"type":"string"}},"issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["severity","area","description"],"properties":{"severity":{"enum":["high","medium","low"]},"area":{"type":"string"},"description":{"type":"string"}}}}}}}}}
+        {"type":"object","additionalProperties":false,"required":["reviews"],"properties":{"reviews":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["altText","summary","differences","issues"],"properties":{"altText":{"type":"string"},"summary":{"type":"string"},"differences":{"type":"array","items":{"type":"string"}},"issues":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["severity","area","description"],"properties":{"severity":{"type":"string","enum":["high","medium","low"]},"area":{"type":"string"},"description":{"type":"string"}}}}}}}}}
         """;
 
     public static Uri ValidateBaseUri(Uri baseUri)
@@ -279,6 +280,7 @@ internal static class AiReviewProviderProtocol
     public static async Task<byte[]> SendAsync(
         HttpClient httpClient,
         HttpRequestMessage request,
+        string? sensitiveValue,
         CancellationToken cancellationToken)
     {
         HttpResponseMessage response;
@@ -308,7 +310,7 @@ internal static class AiReviewProviderProtocol
             if (!response.IsSuccessStatusCode)
             {
                 throw new AiReviewProviderException(
-                    $"AI provider request failed ({(int)response.StatusCode} {response.StatusCode}): {SanitizeError(bytes)}");
+                    $"AI provider request failed ({(int)response.StatusCode} {response.StatusCode}): {SanitizeError(bytes, sensitiveValue)}");
             }
             return bytes;
         }
@@ -454,11 +456,19 @@ internal static class AiReviewProviderProtocol
         ? $"{prompt}\nThe prior response did not match the required schema. Return only valid JSON matching it."
         : prompt;
 
-    private static string SanitizeError(byte[] bytes)
+    private static string SanitizeError(byte[] bytes, string? sensitiveValue)
     {
         string compact = string.Join(
             ' ',
             Encoding.UTF8.GetString(bytes).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (!string.IsNullOrEmpty(sensitiveValue))
+        {
+            compact = compact.Replace(sensitiveValue, "[REDACTED]", StringComparison.Ordinal);
+        }
+        compact = string.Concat(compact.Select(static character =>
+            char.IsControl(character) || CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.Format
+                ? ' '
+                : character));
         return compact.Length <= 500 ? compact : compact[..500];
     }
 

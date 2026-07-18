@@ -23,9 +23,10 @@ public sealed class GrokImageReviewProvider : IImageReviewProvider, IDisposable
         }
 
         _options = options;
+        Uri baseUri = AiReviewProviderProtocol.ValidateBaseUri(httpClient?.BaseAddress ?? options.BaseUri);
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
-        _httpClient.BaseAddress = AiReviewProviderProtocol.ValidateBaseUri(_httpClient.BaseAddress ?? options.BaseUri);
+        _httpClient.BaseAddress = baseUri;
     }
 
     public async Task<AiReviewDocument> ReviewAsync(
@@ -76,7 +77,11 @@ public sealed class GrokImageReviewProvider : IImageReviewProvider, IDisposable
                 correction: attempt > 0);
             using HttpRequestMessage message = AiReviewProviderProtocol.CreateJsonRequest(HttpMethod.Post, "responses", body);
             message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
-            byte[] response = await AiReviewProviderProtocol.SendAsync(_httpClient, message, cancellationToken).ConfigureAwait(false);
+            byte[] response = await AiReviewProviderProtocol.SendAsync(
+                _httpClient,
+                message,
+                _options.ApiKey,
+                cancellationToken).ConfigureAwait(false);
             try
             {
                 return AiReviewProviderProtocol.ParseEntry(

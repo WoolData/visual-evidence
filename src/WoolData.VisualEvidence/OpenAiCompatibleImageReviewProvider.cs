@@ -25,9 +25,9 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
         }
 
         _options = options;
+        Uri baseUri = AiReviewProviderProtocol.ValidateBaseUri(httpClient?.BaseAddress ?? options.BaseUri);
         _ownsClient = httpClient is null;
         _httpClient = httpClient ?? new HttpClient();
-        Uri baseUri = AiReviewProviderProtocol.ValidateBaseUri(_httpClient.BaseAddress ?? options.BaseUri);
         _httpClient.BaseAddress = baseUri;
     }
 
@@ -82,7 +82,11 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
             {
                 message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.ApiKey);
             }
-            byte[] response = await AiReviewProviderProtocol.SendAsync(_httpClient, message, cancellationToken).ConfigureAwait(false);
+            byte[] response = await AiReviewProviderProtocol.SendAsync(
+                _httpClient,
+                message,
+                _options.ApiKey,
+                cancellationToken).ConfigureAwait(false);
             try
             {
                 return AiReviewProviderProtocol.ParseEntry(
