@@ -30,7 +30,7 @@ jobs:
           [IO.File]::WriteAllBytes('artifacts/native-action-canary.png', $bytes)
       - name: Publish through the released Action
         id: evidence
-        uses: WoolData/visual-evidence@v0.2.4
+        uses: WoolData/visual-evidence@v0.3.0
         with:
           images: artifacts/native-action-canary.png
           summary: NativeAOT Action canary using a verified release archive and the default GITHUB_TOKEN.

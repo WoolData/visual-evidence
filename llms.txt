@@ -18,6 +18,6 @@ idempotent. Treat a nonzero exit code or `{"ok":false}` as failure.
 - Result schema: `schema/agent-protocol-v1.json`
 - Evidence schema: `schema/evidence-manifest-v1.schema.json`
 - Advisory review schema: `schema/ai-review-v1.schema.json`
-- GitHub Action: `WoolData/visual-evidence@v0.2.4`
+- GitHub Action: `WoolData/visual-evidence@v0.3.0`
 - Native and .NET tool packages: GitHub Releases
 - Full human documentation: `README.md`
