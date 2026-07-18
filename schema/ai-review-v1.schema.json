@@ -8,8 +8,8 @@
   "properties": {
     "schemaVersion": { "const": 1 },
     "task": { "enum": ["compare", "describe", "issues"] },
-    "provider": { "type": "string", "minLength": 1, "maxLength": 100 },
-    "model": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "provider": { "type": "string", "minLength": 1, "maxLength": 100, "pattern": ".*\\S.*" },
+    "model": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": ".*\\S.*" },
     "promptSha256": { "$ref": "#/$defs/sha256" },
     "transportMaxEdge": { "type": "integer", "minimum": 1, "maximum": 8192 },
     "reviews": {
@@ -51,8 +51,8 @@
       "required": ["severity", "description"],
       "properties": {
         "severity": { "enum": ["high", "medium", "low"] },
-        "area": { "type": "string", "minLength": 1, "maxLength": 200 },
-        "description": { "type": "string", "minLength": 1, "maxLength": 1000 }
+        "area": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": ".*\\S.*" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000, "pattern": ".*\\S.*" }
       }
     },
     "review": {
@@ -60,14 +60,14 @@
       "additionalProperties": false,
       "required": ["key", "source"],
       "properties": {
-        "key": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "key": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": ".*\\S.*" },
         "source": { "$ref": "#/$defs/source" },
-        "altText": { "type": "string", "minLength": 1, "maxLength": 500 },
-        "summary": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "altText": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": ".*\\S.*" },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": ".*\\S.*" },
         "differences": {
           "type": "array",
           "maxItems": 50,
-          "items": { "type": "string", "minLength": 1, "maxLength": 1000 }
+          "items": { "type": "string", "minLength": 1, "maxLength": 1000, "pattern": ".*\\S.*" }
         },
         "issues": {
           "type": "array",

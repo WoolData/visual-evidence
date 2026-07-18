@@ -63,6 +63,59 @@ public sealed class AiReviewDocumentCodecTests
     }
 
     [Fact]
+    public void Read_RejectsNullPromptHashWithoutStackTrace()
+    {
+        const string json = """
+            {"schemaVersion":1,"task":"compare","provider":"test","model":"test","promptSha256":null,"transportMaxEdge":1568,"reviews":[{"key":"home","source":{"beforeSha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","afterSha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}]}
+            """;
+
+        EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
+            () => AiReviewDocumentCodec.Read(Encoding.UTF8.GetBytes(json)));
+
+        Assert.Contains("promptSha256", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_RejectsDuplicateReviewKeys()
+    {
+        AiReviewDocument document = CreateDocument();
+        AiReviewEntry entry = document.Reviews.Single();
+        document = document with { Reviews = new[] { entry, entry } };
+
+        EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
+            () => AiReviewDocumentCodec.Validate(document));
+
+        Assert.Contains("duplicate key", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("   ")]
+    [InlineData("summary\nwith newline")]
+    [InlineData("summary\u202Etxt")]
+    public void Validate_RejectsUnsafeSummaryText(string summary)
+    {
+        AiReviewDocument document = CreateDocument();
+        AiReviewEntry entry = document.Reviews.Single();
+        document = document with { Reviews = new[] { entry with { Summary = summary } } };
+
+        EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
+            () => AiReviewDocumentCodec.Validate(document));
+
+        Assert.Contains("summary", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Read_RejectsDocumentLargerThanBoundary()
+    {
+        byte[] oversized = new byte[AiReviewDocumentCodec.MaximumDocumentBytes + 1];
+
+        EvidenceValidationException error = Assert.Throws<EvidenceValidationException>(
+            () => AiReviewDocumentCodec.Read(oversized));
+
+        Assert.Contains(AiReviewDocumentCodec.MaximumDocumentBytes.ToString(), error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Validate_RejectsAmbiguousSourceProvenance()
     {
         AiReviewDocument document = CreateDocument();

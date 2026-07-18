@@ -2,6 +2,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 
 namespace WoolData.VisualEvidence;
 
@@ -18,6 +19,7 @@ public static class AiReviewDocumentCodec
         PropertyNameCaseInsensitive = false,
         ReadCommentHandling = JsonCommentHandling.Disallow,
         AllowTrailingCommas = false,
+        MaxDepth = 32,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
 
@@ -228,16 +230,22 @@ public static class AiReviewDocumentCodec
 
     private static void ValidateText(string? value, string name, int maximumLength)
     {
-        if (string.IsNullOrWhiteSpace(value) || value.Length > maximumLength || value.Contains('\0'))
+        if (string.IsNullOrWhiteSpace(value) ||
+            value.Length > maximumLength ||
+            value.Any(static character =>
+                char.IsControl(character) ||
+                CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.Format))
         {
             throw new EvidenceValidationException(
-                $"AI review {name} must contain between 1 and {maximumLength} characters and no NUL characters.");
+                $"AI review {name} must contain between 1 and {maximumLength} characters and no control or formatting characters.");
         }
     }
 
-    private static void ValidateHash(string value, string name)
+    private static void ValidateHash(string? value, string name)
     {
-        if (value.Length != 64 || value.Any(static character => !Uri.IsHexDigit(character)))
+        if (value is null ||
+            value.Length != 64 ||
+            value.Any(static character => !Uri.IsHexDigit(character)))
         {
             throw new EvidenceValidationException($"AI review {name} must be a 64-character SHA-256 value.");
         }
