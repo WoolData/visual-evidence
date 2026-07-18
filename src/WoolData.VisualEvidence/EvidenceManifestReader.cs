@@ -37,7 +37,15 @@ public static class EvidenceManifestReader
                 stream,
                 SerializerContext.EvidenceManifest,
                 cancellationToken).ConfigureAwait(false);
-            return manifest ?? throw new EvidenceValidationException($"Manifest is empty: {path}");
+            if (manifest is null)
+            {
+                throw new EvidenceValidationException($"Manifest is empty: {path}");
+            }
+            if (manifest.Environment is null || manifest.Captures is null || manifest.Captures.Any(static capture => capture is null))
+            {
+                throw new EvidenceValidationException($"Manifest contains a null environment, capture collection, or capture: {path}");
+            }
+            return manifest;
         }
         catch (EvidenceValidationException)
         {

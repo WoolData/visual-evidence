@@ -53,6 +53,53 @@ public sealed class AgentProtocolTests
             Console.SetError(original);
         }
     }
+
+    [Fact]
+    public async Task UnknownOption_IsRejectedInsteadOfSilentlyIgnored()
+    {
+        TextWriter original = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetError(output);
+            int exitCode = await ProgramMain.RunAsync(["validate", "--maximum-image-byte", "1", "--json"]);
+
+            Assert.Equal(2, exitCode);
+            using JsonDocument document = JsonDocument.Parse(output.ToString());
+            Assert.Equal("invalid_arguments", document.RootElement.GetProperty("error").GetProperty("code").GetString());
+            Assert.Contains("--maximum-image-byte", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+    }
+
+    [Fact]
+    public async Task Publish_RejectsOverlongSummaryBeforeGitHubAccess()
+    {
+        TextWriter original = Console.Error;
+        using var output = new StringWriter();
+        try
+        {
+            Console.SetError(output);
+            int exitCode = await ProgramMain.RunAsync([
+                "publish",
+                "--summary", new string('a', 2001),
+                "--repository", "WoolData/example",
+                "--change-number", "1",
+                "--image", "missing.png",
+                "--json",
+            ]);
+
+            Assert.Equal(2, exitCode);
+            Assert.Contains("no longer than 2000", output.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Console.SetError(original);
+        }
+    }
 }
 
 [CollectionDefinition("Console", DisableParallelization = true)]

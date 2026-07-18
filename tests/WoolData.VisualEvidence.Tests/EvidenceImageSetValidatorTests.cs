@@ -7,6 +7,39 @@ namespace WoolData.VisualEvidence.Tests;
 public sealed class EvidenceImageSetValidatorTests
 {
     [Fact]
+    public async Task ValidateDirectoryAsync_RejectsReparsePointSubtreeInsteadOfSkippingIt()
+    {
+        string root = CreateRoot();
+        string external = CreateRoot();
+        try
+        {
+            WritePng(Path.Combine(root, "visible.png"), singleColor: false);
+            WritePng(Path.Combine(external, "linked.png"), singleColor: false);
+            string link = Path.Combine(root, "linked");
+            try
+            {
+                Directory.CreateSymbolicLink(link, external);
+            }
+            catch (Exception ex) when (OperatingSystem.IsWindows() && ex is UnauthorizedAccessException or IOException)
+            {
+                return;
+            }
+
+            EvidenceValidationException exception = await Assert.ThrowsAsync<EvidenceValidationException>(() =>
+                new EvidenceImageSetValidator().ValidateDirectoryAsync(
+                    root,
+                    TestContext.Current.CancellationToken));
+
+            Assert.Contains("symbolic link or reparse point", exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(external, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ValidateAsync_AcceptsIndividualPngAndDerivesAgentFriendlyMetadata()
     {
         string root = CreateRoot();
