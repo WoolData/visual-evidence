@@ -122,8 +122,19 @@ public sealed class EvidencePublicationService
         }
 
         string commit = commitMatch.Groups["sha"].Value;
-        string prefix = $"https://github.com/{_repository}/blob/{commit}/pr-{changeNumber}/{headRevision}/";
-        return comment.Contains($"]({prefix}before/", StringComparison.Ordinal) &&
-            comment.Contains($"]({prefix}after/", StringComparison.Ordinal);
+        string beforePrefix = GitHubAssetUrl.BuildEvidencePrefix(
+            _repository,
+            commit,
+            changeNumber,
+            headRevision,
+            "before");
+        string afterPrefix = GitHubAssetUrl.BuildEvidencePrefix(
+            _repository,
+            commit,
+            changeNumber,
+            headRevision,
+            "after");
+        return comment.Contains($"]({beforePrefix}", StringComparison.Ordinal) &&
+            comment.Contains($"]({afterPrefix}", StringComparison.Ordinal);
     }
 }
