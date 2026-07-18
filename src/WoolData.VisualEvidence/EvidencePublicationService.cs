@@ -114,7 +114,7 @@ public sealed class EvidencePublicationService
 
         System.Text.RegularExpressions.Match commitMatch = System.Text.RegularExpressions.Regex.Match(
             comment,
-            "(?m)^Visual-Evidence-Asset-Commit: (?<sha>[0-9a-f]{40}|[0-9a-f]{64})$",
+            "(?m)^Visual-Evidence-Asset-Commit: (?<sha>[0-9a-f]{40}|[0-9a-f]{64})\r?$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
         if (!commitMatch.Success)
         {

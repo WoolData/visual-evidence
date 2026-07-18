@@ -27,6 +27,22 @@ public sealed class ReviewMarkdownTests
     }
 
     [Fact]
+    public void Build_EmitsLineFeedOnlyMarkdownOnEveryPlatform()
+    {
+        string head = new('2', 40);
+        var revision = new ChangeRequestRevision(7, head, new string('4', 40), new string('1', 40));
+        var publication = new AssetPublication(new string('3', 40), new[]
+        {
+            new PublishedAsset("home", "Home compact", $"pr-7/{head}/before/home.png", $"pr-7/{head}/after/home.png"),
+        });
+
+        string markdown = ReviewMarkdown.Build("WoolData/example", revision, publication, "Summary");
+
+        Assert.DoesNotContain('\r', markdown);
+        Assert.Contains('\n', markdown);
+    }
+
+    [Fact]
     public void BuildNeutralizesUntrustedMarkdownAndMentions()
     {
         var revision = new ChangeRequestRevision(7, new string('b', 40), new string('a', 40), new string('c', 40));

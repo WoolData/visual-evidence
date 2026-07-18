@@ -42,7 +42,10 @@ public static class ReviewMarkdown
             markdown.AppendLine($"| ![Before: {EscapeAlt(asset.Label)}]({beforeUrl}) | ![After: {EscapeAlt(asset.Label)}]({afterUrl}) |");
         }
 
-        return markdown.ToString().TrimEnd();
+        // StringBuilder.AppendLine emits the platform newline, and GitHub preserves posted
+        // CRLF bytes verbatim. Normalize so published markdown is byte-identical on every
+        // operating system and marker lines stay matchable by line-anchored verification.
+        return markdown.ToString().Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd();
     }
 
     private static string Escape(string value) => NormalizeSingleLine(value)
