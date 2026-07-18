@@ -135,4 +135,35 @@ public sealed class ReviewMarkdownTests
         Assert.Contains("hxxps://evil.example", markdown, StringComparison.Ordinal);
         Assert.Contains("&#96;&#64;reviewers", markdown, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Build_WithLargeAiReviewKeepsDigestWithinHardLimit()
+    {
+        string head = new('2', 40);
+        var revision = new ChangeRequestRevision(7, head, new string('4', 40), new string('1', 40));
+        var publication = new AssetPublication(
+            new string('3', 40),
+            [new PublishedAsset("screen-0", "Screen", "before/screen.png", "after/screen.png")],
+            $"pr-7/{head}/ai-review-v1.json");
+        AiReviewEntry template = AiReviewDocumentCodecTests.CreateDocument().Reviews.Single();
+        AiReviewDocument review = AiReviewDocumentCodecTests.CreateDocument() with
+        {
+            Reviews = Enumerable.Range(0, 6)
+                .Select(index => template with
+                {
+                    Key = $"screen-{index}",
+                    Summary = new string('x', 2000),
+                    Differences = Array.Empty<string>(),
+                    Issues = Array.Empty<AiReviewIssue>(),
+                })
+                .ToArray(),
+        };
+
+        string markdown = ReviewMarkdown.Build("WoolData/example", revision, publication, "Summary", review);
+        int digestStart = markdown.IndexOf("## Advisory AI visual review", StringComparison.Ordinal);
+        string digest = markdown[digestStart..];
+
+        Assert.InRange(digest.Length, 1, 8000);
+        Assert.Contains("Additional observations are available", digest, StringComparison.Ordinal);
+    }
 }

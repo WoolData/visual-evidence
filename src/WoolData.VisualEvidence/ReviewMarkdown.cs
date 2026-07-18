@@ -155,8 +155,11 @@ public static class ReviewMarkdown
 
             if (digest.Length + section.Length > MaximumAiDigestCharacters)
             {
-                digest.AppendLine();
-                digest.AppendLine("Additional observations are available in the full structured review.");
+                string notice = $"{Environment.NewLine}Additional observations are available in the full structured review.{Environment.NewLine}";
+                if (digest.Length + notice.Length <= MaximumAiDigestCharacters)
+                {
+                    digest.Append(notice);
+                }
                 break;
             }
             digest.Append(section);
