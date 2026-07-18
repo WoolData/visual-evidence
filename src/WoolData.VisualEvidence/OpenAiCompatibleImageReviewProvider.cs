@@ -17,6 +17,12 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
         {
             throw new ArgumentException("OpenAI-compatible model is required.", nameof(options));
         }
+        if (string.IsNullOrWhiteSpace(options.ProviderName) ||
+            options.ProviderName.Length > 100 ||
+            options.ProviderName.Any(char.IsControl))
+        {
+            throw new ArgumentException("OpenAI-compatible provider name must contain 1 to 100 printable characters.", nameof(options));
+        }
 
         _options = options;
         _ownsClient = httpClient is null;
@@ -40,7 +46,7 @@ public sealed class OpenAiCompatibleImageReviewProvider : IImageReviewProvider, 
         {
             SchemaVersion = 1,
             Task = request.Task,
-            Provider = "openai-compatible",
+            Provider = _options.ProviderName,
             Model = _options.Model,
             PromptSha256 = request.PromptSha256,
             TransportMaxEdge = request.TransportMaxEdge,

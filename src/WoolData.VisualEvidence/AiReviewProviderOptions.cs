@@ -19,5 +19,7 @@ public sealed record OpenAiCompatibleImageReviewOptions
 
     public required string Model { get; init; }
 
+    public string ProviderName { get; init; } = "openai-compatible";
+
     public Uri BaseUri { get; init; } = new("https://api.openai.com/v1/");
 }

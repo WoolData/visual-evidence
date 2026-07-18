@@ -67,6 +67,39 @@ public sealed class AiImageReviewProviderTests
         Assert.Equal("openai-compatible", result.Provider);
     }
 
+    [Theory]
+    [InlineData("grok")]
+    [InlineData("gemini")]
+    public async Task OpenAiCompatibleProvider_RecordsFirstClassProviderProfile(string providerName)
+    {
+        HttpRequestMessage? observed = null;
+        var handler = new StubHandler(async request =>
+        {
+            observed = await CloneAsync(request);
+            return JsonResponse(OpenAiEnvelope(Content()));
+        });
+        using var client = new HttpClient(handler) { BaseAddress = new Uri("https://provider.test/v1/") };
+        using var provider = new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions
+            {
+                ApiKey = "provider-secret",
+                Model = "vision-test",
+                ProviderName = providerName,
+            },
+            client);
+
+        AiReviewDocument result = await provider.ReviewAsync(
+            Request("screen"),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(observed);
+        Assert.Equal("provider-secret", observed.Headers.Authorization!.Parameter);
+        Assert.Equal(providerName, result.Provider);
+        string body = await observed.Content!.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains("\"response_format\"", body, StringComparison.Ordinal);
+        Assert.Contains("data:image/png;base64,", body, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Provider_RetriesMalformedStructuredOutputOnceThenFails()
     {
@@ -117,6 +150,17 @@ public sealed class AiImageReviewProviderTests
             {
                 Model = "vision-test",
                 BaseUri = new Uri("http://example.com/v1/"),
+            }));
+    }
+
+    [Fact]
+    public void Provider_RejectsInvalidProviderName()
+    {
+        Assert.Throws<ArgumentException>(() => new OpenAiCompatibleImageReviewProvider(
+            new OpenAiCompatibleImageReviewOptions
+            {
+                Model = "vision-test",
+                ProviderName = " ",
             }));
     }
 

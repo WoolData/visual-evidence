@@ -27,9 +27,10 @@ public sealed class AgentProtocolTests
             Assert.True(document.RootElement.GetProperty("captureIsExternal").GetBoolean());
             Assert.Equal("GITHUB_TOKEN", document.RootElement.GetProperty("tokenEnvironmentVariable").GetString());
             Assert.True(document.RootElement.GetProperty("republishIsIdempotent").GetBoolean());
-            Assert.Equal(
-                5,
-                document.RootElement.GetProperty("environmentVariables").EnumerateObject().Count());
+            JsonElement environmentVariables = document.RootElement.GetProperty("environmentVariables");
+            Assert.Equal(7, environmentVariables.EnumerateObject().Count());
+            Assert.True(environmentVariables.TryGetProperty("XAI_API_KEY", out _));
+            Assert.True(environmentVariables.TryGetProperty("GEMINI_API_KEY", out _));
             Assert.Equal(4, document.RootElement.GetProperty("workflow").GetArrayLength());
             JsonElement.ArrayEnumerator publishOptions = document.RootElement
                 .GetProperty("commands")
@@ -197,14 +198,21 @@ public sealed class AgentProtocolTests
     public async Task Review_RequiresExplicitProviderWhenBothDefaultKeysExist()
     {
         using var fixture = new EvidenceFixture();
-        string? originalAnthropic = Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY");
-        string? originalOpenAi = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        string[] variables = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY"];
+        Dictionary<string, string?> originals = variables.ToDictionary(
+            static variable => variable,
+            static variable => Environment.GetEnvironmentVariable(variable),
+            StringComparer.Ordinal);
         TextWriter originalError = Console.Error;
         using var output = new StringWriter();
         try
         {
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", "anthropic-secret");
-            Environment.SetEnvironmentVariable("OPENAI_API_KEY", "openai-secret");
+            foreach (string variable in variables)
+            {
+                Environment.SetEnvironmentVariable(variable, null);
+            }
+            Environment.SetEnvironmentVariable("XAI_API_KEY", "xai-secret");
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", "gemini-secret");
             Console.SetError(output);
 
             int exitCode = await ProgramMain.RunAsync([
@@ -221,13 +229,68 @@ public sealed class AgentProtocolTests
                 "specify --ai-provider",
                 document.RootElement.GetProperty("error").GetProperty("message").GetString(),
                 StringComparison.Ordinal);
+            Assert.Contains("grok", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
+            Assert.Contains("gemini", document.RootElement.GetProperty("error").GetProperty("message").GetString(), StringComparison.Ordinal);
         }
         finally
         {
             Console.SetError(originalError);
-            Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", originalAnthropic);
-            Environment.SetEnvironmentVariable("OPENAI_API_KEY", originalOpenAi);
+            foreach ((string variable, string? value) in originals)
+            {
+                Environment.SetEnvironmentVariable(variable, value);
+            }
         }
+    }
+
+    [Theory]
+    [InlineData("ANTHROPIC_API_KEY", "anthropic")]
+    [InlineData("OPENAI_API_KEY", "openai-compatible")]
+    [InlineData("XAI_API_KEY", "grok")]
+    [InlineData("GEMINI_API_KEY", "gemini")]
+    public void Review_InfersExactlyOneConfiguredProvider(string configuredVariable, string expectedProvider)
+    {
+        string[] variables = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY", "GEMINI_API_KEY"];
+        Dictionary<string, string?> originals = variables.ToDictionary(
+            static variable => variable,
+            static variable => Environment.GetEnvironmentVariable(variable),
+            StringComparer.Ordinal);
+        try
+        {
+            foreach (string variable in variables)
+            {
+                Environment.SetEnvironmentVariable(variable, null);
+            }
+            Environment.SetEnvironmentVariable(configuredVariable, "test-secret");
+
+            Assert.Equal(expectedProvider, ProgramMain.ResolveAiProvider(OptionReader.Parse([])));
+        }
+        finally
+        {
+            foreach ((string variable, string? value) in originals)
+            {
+                Environment.SetEnvironmentVariable(variable, value);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", true, false)]
+    [InlineData("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", false, true)]
+    [InlineData("grok", "XAI_API_KEY", "https://api.x.ai/v1/", false, false)]
+    [InlineData("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", false, false)]
+    public void Review_ProviderProfilesPinCredentialEndpointAndProtocol(
+        string name,
+        string keyVariable,
+        string baseUrl,
+        bool usesAnthropicProtocol,
+        bool allowsNoAuth)
+    {
+        AiProviderProfile profile = ProgramMain.ResolveAiProviderProfile(name);
+
+        Assert.Equal(keyVariable, profile.KeyEnvironmentVariable);
+        Assert.Equal(baseUrl, profile.BaseUrl);
+        Assert.Equal(usesAnthropicProtocol, profile.UsesAnthropicProtocol);
+        Assert.Equal(allowsNoAuth, profile.AllowsNoAuth);
     }
 
     [Fact]

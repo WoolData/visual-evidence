@@ -10,6 +10,14 @@ return await ProgramMain.RunAsync(args).ConfigureAwait(false);
 
 internal static class ProgramMain
 {
+    private static readonly AiProviderProfile[] AiProviderProfiles =
+    [
+        new("anthropic", "ANTHROPIC_API_KEY", "https://api.anthropic.com/", true, false),
+        new("openai-compatible", "OPENAI_API_KEY", "https://api.openai.com/v1/", false, true),
+        new("grok", "XAI_API_KEY", "https://api.x.ai/v1/", false, false),
+        new("gemini", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai/", false, false),
+    ];
+
     public static async Task<int> RunAsync(string[] args)
     {
         using var cancellation = new CancellationTokenSource();
@@ -96,8 +104,9 @@ internal static class ProgramMain
             AiReviewTransportImageFactory.CreateComparison(evidence, maximumEdge));
 
         string providerName = ResolveAiProvider(options);
+        AiProviderProfile profile = ResolveAiProviderProfile(providerName);
         AiReviewDocument review;
-        if (providerName == "anthropic")
+        if (profile.UsesAnthropicProtocol)
         {
             if (options.OptionalBool("ai-no-auth", false))
             {
@@ -105,24 +114,25 @@ internal static class ProgramMain
             }
             using var provider = new AnthropicImageReviewProvider(new AnthropicImageReviewOptions
             {
-                ApiKey = ResolveAiKey(options, "ANTHROPIC_API_KEY", allowNoAuth: false),
+                ApiKey = ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
                 Model = options.Required("ai-model"),
-                BaseUri = ResolveAiBaseUri(options, "https://api.anthropic.com/"),
+                BaseUri = ResolveAiBaseUri(options, profile.BaseUrl),
             });
             review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
         }
         else
         {
             bool noAuth = options.OptionalBool("ai-no-auth", false);
-            Uri baseUri = ResolveAiBaseUri(options, "https://api.openai.com/v1/");
-            if (noAuth && !baseUri.IsLoopback)
+            Uri baseUri = ResolveAiBaseUri(options, profile.BaseUrl);
+            if (noAuth && (!profile.AllowsNoAuth || !baseUri.IsLoopback))
             {
-                throw new ArgumentException("--ai-no-auth is allowed only for a loopback --ai-base-url.");
+                throw new ArgumentException("--ai-no-auth is allowed only with --ai-provider openai-compatible and a loopback --ai-base-url.");
             }
             using var provider = new OpenAiCompatibleImageReviewProvider(new OpenAiCompatibleImageReviewOptions
             {
-                ApiKey = noAuth ? null : ResolveAiKey(options, "OPENAI_API_KEY", allowNoAuth: false),
+                ApiKey = noAuth ? null : ResolveAiKey(options, profile.KeyEnvironmentVariable, allowNoAuth: false),
                 Model = options.Required("ai-model"),
+                ProviderName = providerName,
                 BaseUri = baseUri,
             });
             review = await provider.ReviewAsync(request, cancellationToken).ConfigureAwait(false);
@@ -309,6 +319,8 @@ internal static class ProgramMain
                     ["GITHUB_API_URL"] = "Optional API endpoint default for --api-url.",
                     ["ANTHROPIC_API_KEY"] = "Default Anthropic review credential; never pass keys as arguments.",
                     ["OPENAI_API_KEY"] = "Default OpenAI-compatible review credential; never pass keys as arguments.",
+                    ["XAI_API_KEY"] = "Default Grok review credential; never pass keys as arguments.",
+                    ["GEMINI_API_KEY"] = "Default Gemini review credential; never pass keys as arguments.",
                 },
                 new Dictionary<string, AgentCommandDescription>(StringComparer.Ordinal)
                 {
@@ -498,29 +510,32 @@ internal static class ProgramMain
             : token;
     }
 
-    private static string ResolveAiProvider(OptionReader options)
+    internal static string ResolveAiProvider(OptionReader options)
     {
         string? explicitProvider = options.Optional("ai-provider")?.ToLowerInvariant();
-        if (explicitProvider is not null && explicitProvider is not ("anthropic" or "openai-compatible"))
-        {
-            throw new ArgumentException("--ai-provider must be anthropic or openai-compatible.");
-        }
         if (explicitProvider is not null)
         {
+            _ = ResolveAiProviderProfile(explicitProvider);
             return explicitProvider;
         }
 
-        bool anthropic = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY"));
-        bool openAi = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
-        if (anthropic == openAi)
+        string[] configured = AiProviderProfiles
+            .Where(static profile => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(profile.KeyEnvironmentVariable)))
+            .Select(static profile => profile.Name)
+            .ToArray();
+        if (configured.Length != 1)
         {
             throw new ArgumentException(
-                anthropic
-                    ? "Both ANTHROPIC_API_KEY and OPENAI_API_KEY are set; specify --ai-provider to choose the screenshot egress destination."
-                    : "No AI provider credential was found; set ANTHROPIC_API_KEY or OPENAI_API_KEY, or specify --ai-provider openai-compatible --ai-no-auth true for a loopback provider.");
+                configured.Length > 1
+                    ? $"Multiple AI provider credentials are set ({string.Join(", ", configured)}); specify --ai-provider to choose the screenshot egress destination."
+                    : "No AI provider credential was found; set ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY, or GEMINI_API_KEY, or specify --ai-provider openai-compatible --ai-no-auth true for a loopback provider.");
         }
-        return anthropic ? "anthropic" : "openai-compatible";
+        return configured[0];
     }
+
+    internal static AiProviderProfile ResolveAiProviderProfile(string name) =>
+        AiProviderProfiles.FirstOrDefault(profile => string.Equals(profile.Name, name, StringComparison.Ordinal)) ??
+        throw new ArgumentException("--ai-provider must be anthropic, openai-compatible, grok, or gemini.");
 
     private static string ResolveAiKey(OptionReader options, string defaultVariable, bool allowNoAuth)
     {
@@ -612,7 +627,7 @@ internal static class ProgramMain
 
             AI review options:
               --task compare                       Default and only current task
-              --ai-provider NAME                   anthropic or openai-compatible; inferred from one default key
+              --ai-provider NAME                   anthropic, openai-compatible, grok, or gemini
               --ai-model MODEL                     Required; no moving model default
               --ai-base-url URL                    Optional provider endpoint override
               --ai-key-environment-variable NAME  Optional credential environment variable override
@@ -628,6 +643,13 @@ internal static class ProgramMain
             """);
     }
 }
+
+internal sealed record AiProviderProfile(
+    string Name,
+    string KeyEnvironmentVariable,
+    string BaseUrl,
+    bool UsesAnthropicProtocol,
+    bool AllowsNoAuth);
 
 internal sealed class OptionReader
 {

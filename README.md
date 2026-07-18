@@ -155,22 +155,32 @@ source-hash-bound `ai-review-v1` JSON. It never changes the full-resolution
 evidence, and its output is advisory rather than a merge decision.
 
 ```powershell
-$env:ANTHROPIC_API_KEY = "..." # or OPENAI_API_KEY
+$env:GEMINI_API_KEY = "..." # or ANTHROPIC_API_KEY, OPENAI_API_KEY, XAI_API_KEY
 visual-evidence review `
   --evidence-root ./evidence `
   --output ./ai-review-v1.json `
+  --ai-provider gemini `
   --ai-model MODEL_ID `
   --json
 ```
 
 If exactly one default provider key is set, the CLI infers that provider. If
-both are set, `--ai-provider anthropic|openai-compatible` is required because
-the choice controls where screenshots leave the machine. Credentials are read
-only from environment variables. An explicitly selected OpenAI-compatible
-loopback server may use `--ai-no-auth true`; plaintext HTTP is refused for
-non-loopback hosts. Use `--prompt-file` to override the injection-resistant
-default prompt. The effective prompt hash, provider, model, transport edge, and
-validated source-image hashes are recorded in the output.
+more than one is set, `--ai-provider anthropic|openai-compatible|grok|gemini`
+is required because the choice controls where screenshots leave the machine.
+Grok uses `XAI_API_KEY` and xAI's official endpoint; Gemini uses
+`GEMINI_API_KEY` and Google's official OpenAI-compatible endpoint. Choose a
+model that supports image inputs and structured outputs; the CLI deliberately
+does not carry a moving model default. Credentials are read only from
+environment variables. An explicitly selected OpenAI-compatible loopback
+server may use `--ai-no-auth true`; plaintext HTTP is refused for non-loopback
+hosts. Use `--prompt-file` to override the injection-resistant default prompt.
+The effective prompt hash, provider, model, transport edge, and validated
+source-image hashes are recorded in the output.
+
+Protocol references: [xAI image understanding](https://docs.x.ai/developers/model-capabilities/images/understanding),
+[xAI structured outputs](https://docs.x.ai/developers/model-capabilities/text/structured-outputs),
+[Gemini OpenAI compatibility](https://ai.google.dev/gemini-api/docs/openai), and
+[Gemini structured outputs](https://ai.google.dev/gemini-api/docs/structured-output).
 
 Direct API providers are the unattended CI path. Optional adapters for existing
 Codex CLI and Claude Code subscription logins are tracked separately in
