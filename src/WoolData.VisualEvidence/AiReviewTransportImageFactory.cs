@@ -39,20 +39,19 @@ public static class AiReviewTransportImageFactory
                 "Transport maximum edge must be between 1 and 8192 pixels.");
         }
 
-        using SKData data = SKData.CreateCopy(image.NormalizedPng);
-        using SKBitmap source = SKBitmap.Decode(data)
-            ?? throw new EvidenceValidationException($"Validated capture '{image.Key}' could not be decoded for AI transport.");
-
-        int longestEdge = Math.Max(source.Width, source.Height);
+        int longestEdge = Math.Max(image.Width, image.Height);
         if (longestEdge <= maximumEdge)
         {
             return new AiReviewTransportImage(
                 image.SourceSha256,
-                source.Width,
-                source.Height,
+                image.Width,
+                image.Height,
                 image.NormalizedPng.ToArray());
         }
 
+        using SKData data = SKData.CreateCopy(image.NormalizedPng);
+        using SKBitmap source = SKBitmap.Decode(data)
+            ?? throw new EvidenceValidationException($"Validated capture '{image.Key}' could not be decoded for AI transport.");
         double scale = (double)maximumEdge / longestEdge;
         int width = Math.Max(1, (int)Math.Round(source.Width * scale, MidpointRounding.AwayFromZero));
         int height = Math.Max(1, (int)Math.Round(source.Height * scale, MidpointRounding.AwayFromZero));
