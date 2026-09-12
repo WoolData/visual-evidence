@@ -4,35 +4,35 @@
     "net10.0": {
       "Microsoft.NET.ILLink.Tasks": {
         "type": "Direct",
-        "requested": "[10.0.10, )",
-        "resolved": "10.0.10",
-        "contentHash": "f5VCIE7AJpd5YvzNTeMGVzQIgyE9tX+AreTYwQF+REbu+DZo/2Ae+jNSwhPEYrVz6RRkd7y8ubXjk6Nn6Ka+Cg=="
+        "requested": "[10.0.8, )",
+        "resolved": "10.0.8",
+        "contentHash": "dVbSXGIFNR5nZcv2tOLoWI+a9T4jtFd77IYjuND+QVe360qWgAF7H0WtoopYhRw/+SgpGUTyrkrh+65+ClNnfw=="
       },
       "SkiaSharp": {
         "type": "Direct",
-        "requested": "[4.150.1, )",
-        "resolved": "4.150.1",
-        "contentHash": "5v3T8X1N62Dp+AkPO70GNBNS/NRBPGMOTiN+Prg33sZAcm/Ug3YOAH+3RTj/jxJV8NGTJs2idGpC2Qdae2mGLQ==",
+        "requested": "[4.152.0, )",
+        "resolved": "4.152.0",
+        "contentHash": "TfYpxUV/Ihe5WyGeddJROZA2RhfGaSEKKNDHhREUVCVihtTlcavHQEi29Q0Mtn37AYXAf7EbC+StVPmWk63tkQ==",
         "dependencies": {
-          "SkiaSharp.NativeAssets.Win32": "4.150.1",
-          "SkiaSharp.NativeAssets.macOS": "4.150.1"
+          "SkiaSharp.NativeAssets.Win32": "4.152.0",
+          "SkiaSharp.NativeAssets.macOS": "4.152.0"
         }
       },
       "SkiaSharp.NativeAssets.Linux.NoDependencies": {
         "type": "Direct",
-        "requested": "[4.150.1, )",
-        "resolved": "4.150.1",
-        "contentHash": "2KVadgDky2xQw7lEMRT/u0ftX5K1u8X7MhCN47Em22Z6VM6JJg1c9cwfGuSPAt1oY6+GjGHH18vkeev+nqT9Kw=="
+        "requested": "[4.152.0, )",
+        "resolved": "4.152.0",
+        "contentHash": "QKTenuh6rbHzX8kJSwPnB2DkLVayNMqsLXfC9P1BQEA4UviA2wOTIUQoeNtRzYHw+Uf6tn4zmdrEH6IuyJQUPg=="
       },
       "SkiaSharp.NativeAssets.macOS": {
         "type": "Transitive",
-        "resolved": "4.150.1",
-        "contentHash": "r755HVwaHZhyf1clWjrM2/RoOZYCzkQEmE9pu/mVsebPejWu52niNPUwtfyf112qoF0PIk6OndqVOUoITj6TwQ=="
+        "resolved": "4.152.0",
+        "contentHash": "Vjx2sPleQDJXQjINxMzHaIU1KFyYAUerfBnwLAjMGSUCf0vCrSU2Y4LvCH0yAheeuu0YdlVfeSMiCKZYVJ12kA=="
       },
       "SkiaSharp.NativeAssets.Win32": {
         "type": "Transitive",
-        "resolved": "4.150.1",
-        "contentHash": "qrLSL8OonbkMJdSH8heK0Jl39Y2xxZGdd7Ru4cyBXk2ITdx+Fu1sCFLmvCKmnMaYs//mlN/YSpSpOurEXErcQw=="
+        "resolved": "4.152.0",
+        "contentHash": "PfyLS6TRP/9YghtW97le8bkzootCietlt7QUqFKGjGcZ6eRjeWNNHCjvxO41O/LYpV4gCthp2xiiUiYTOqfVyA=="
       }
     }
   }
