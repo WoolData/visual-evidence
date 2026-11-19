@@ -1,9 +1,14 @@
 version: 2
+# Supply-chain cooldown: every ecosystem below waits 7 days after a release
+# before proposing it, so a hijacked version is usually caught and pulled first.
+# Security updates are not delayed. Weekly plan item L-1 (Nov 2026).
 updates:
   - package-ecosystem: nuget
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       nuget:
         patterns: ["*"]
@@ -11,6 +16,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
